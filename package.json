@@ -4,6 +4,14 @@
   "version": "1.0.0",
   "description": "Recme - screen recorder with a built-in MCP server so Claude can control it",
   "author": "Recme",
+  "homepage": "https://github.com/bizcuit47/recme-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bizcuit47/recme-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bizcuit47/recme-mcp/issues"
+  },
   "main": "src/main.js",
   "private": true,
   "scripts": {
@@ -29,16 +37,43 @@
     "appId": "com.recme.app",
     "productName": "Recme",
     "copyright": "Recme",
-    "directories": { "output": "dist", "buildResources": "build" },
-    "files": ["src/**/*", "package.json"],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
     "extraResources": [
-      { "from": "vendor/ffmpeg", "to": "ffmpeg", "filter": ["ffmpeg.exe", "ffprobe.exe", "LICENSE"] },
-      { "from": "THIRD-PARTY-NOTICES.md", "to": "THIRD-PARTY-NOTICES.md" },
-      { "from": "LICENSE", "to": "LICENSE.txt" }
+      {
+        "from": "vendor/ffmpeg",
+        "to": "ffmpeg",
+        "filter": [
+          "ffmpeg.exe",
+          "ffprobe.exe",
+          "LICENSE"
+        ]
+      },
+      {
+        "from": "THIRD-PARTY-NOTICES.md",
+        "to": "THIRD-PARTY-NOTICES.md"
+      },
+      {
+        "from": "LICENSE",
+        "to": "LICENSE.txt"
+      }
     ],
     "win": {
       "icon": "build/icon.png",
-      "target": [{ "target": "nsis", "arch": ["x64"] }]
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,

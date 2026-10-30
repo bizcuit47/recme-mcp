@@ -2,7 +2,7 @@
 
 **A screen recorder for Windows that Claude can drive.** Recme has its own MCP server built in: connect it once and Claude can start and stop recordings, look at screenshots and frames of what it recorded, cut and rearrange clips, pull the audio out, shrink a file for sharing, and send it to a nearby device. Sharp native-resolution capture, record any area you drag out (or a saved one by name), built-in editor, Wi-Fi sharing. Everything stays on your computer.
 
-### ⬇️ [Download Recme for Windows](https://github.com/bizcuit47/Recme/releases/latest)
+### ⬇️ [Download Recme for Windows](https://github.com/bizcuit47/recme-mcp/releases/latest)
 
 Get **`Recme-Setup-<version>.exe`** from the latest release, run it, done (ffmpeg is included; no other install needed). Windows 10/11, 64-bit. The installer is not code-signed, so SmartScreen may warn: *More info → Run anyway*. SHA-256 of each installer is in the release notes.
 
