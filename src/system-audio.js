@@ -44,6 +44,8 @@ function createSystemAudio() {
   }
 
   return {
+    /** Load the hidden capture page ahead of time so the first recording with sound starts quickly. */
+    warmUp: () => ensureWindow(),
     async start(file) {
       await ensureWindow();
       out = fs.createWriteStream(file);

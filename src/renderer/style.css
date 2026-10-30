@@ -74,7 +74,18 @@ input[type="text"] {
   font: inherit; color: var(--text); background: #11141a; border: 1px solid var(--line);
   border-radius: 8px; padding: 6px 8px; width: 100%;
 }
-.appset, .recv { grid-column: 1 / -1; }
+.appset, .recv, .askcard { grid-column: 1 / -1; }
+.sizes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+#sizeChips { display: contents; }
+.sizechip { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: 99px; overflow: hidden; }
+.sizechip button { border: 0; border-radius: 0; background: transparent; padding: 3px 10px; font-size: 12.5px; }
+.sizechip button.x { padding: 3px 8px; color: var(--muted); border-left: 1px solid var(--line); }
+.sizechip button.x:hover { color: #ff8a95; background: #4a1f26; }
+.saved { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 8px; margin-top: 10px; }
+.saved select { width: 100%; }
+.kv2.hk { margin: 4px 0 8px 26px; }
+#hkKeys { cursor: pointer; text-align: center; font-family: Consolas, monospace; }
+#hkKeys.listening { border-color: var(--accent); }
 label.check.sub { margin-left: 26px; }
 .kv2 { display: grid; grid-template-columns: 70px 1fr auto auto; gap: 8px; align-items: center; margin-bottom: 12px; color: var(--muted); }
 .kv2 code { background: #11141a; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; color: var(--text); font: 12px Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

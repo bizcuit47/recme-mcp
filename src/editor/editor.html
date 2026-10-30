@@ -84,6 +84,16 @@
           <option value="fast">Fast (no re-encode, cuts at keyframes)</option>
         </select>
       </label>
+      <label>Fit under
+        <select id="sizeLimit" title="Re-encodes the clip to stay under this size (lowers the resolution if needed)">
+          <option value="">No limit (best quality)</option>
+          <option value="8">8 MB</option>
+          <option value="10">10 MB</option>
+          <option value="25">25 MB</option>
+          <option value="50">50 MB</option>
+          <option value="100">100 MB</option>
+        </select>
+      </label>
       <button id="exportVideo" class="primary wide">Export video</button>
       <p class="hint">Only the pieces on the timeline are exported. Removed parts (striped) are cut out.</p>
 

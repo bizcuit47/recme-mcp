@@ -53,7 +53,19 @@
           <label>W <input type="number" id="aw" min="16" step="2"></label>
           <label>H <input type="number" id="ah" min="16" step="2"></label>
         </div>
+        <div class="sizes">
+          <span class="muted">My sizes</span>
+          <span id="sizeChips"></span>
+          <button id="sizeSave" class="ghost" title="Keep the current width × height as a button">+ Save this size</button>
+        </div>
         <p class="hint" id="areaHint"></p>
+        <div class="saved">
+          <select id="savedAreas"><option value="">Saved areas…</option></select>
+          <input type="text" id="areaName" placeholder="name, e.g. game" maxlength="40">
+          <button id="areaSave">Save</button>
+          <button id="areaDelete" class="ghost">Delete</button>
+        </div>
+        <p class="hint">Saved areas can be recorded by name, also by Claude ("record the game area").</p>
       </div>
       <label>Quality
         <select id="quality"></select>
@@ -80,6 +92,14 @@
       <label class="check"><input type="checkbox" id="closeTray"> Keep Recme running in the system tray when I close the window</label>
       <label class="check"><input type="checkbox" id="autostart"> Start Recme when Windows starts</label>
       <label class="check sub"><input type="checkbox" id="startHidden"> …and start hidden in the tray</label>
+      <label class="check"><input type="checkbox" id="hkOn"> Global hotkey to start / stop recording</label>
+      <div class="kv2 hk">
+        <span>Keys</span>
+        <input type="text" id="hkKeys" readonly placeholder="click here, then press the keys" autocomplete="off">
+        <button class="ghost" id="hkReset">Default</button>
+        <span class="muted" id="hkState"></span>
+      </div>
+      <p class="hint">The hotkey and the tray menu start with the settings you used last time.</p>
       <p class="hint" id="appHint">Running in the tray keeps the Claude connection and file receiving alive. Quit from the tray icon.</p>
     </section>
   </main>
@@ -172,6 +192,11 @@
       <div class="kv"><span>Address</span><code id="mcpUrl"></code><button class="ghost" data-copy="mcpUrl">Copy</button></div>
       <div class="kv"><span>Token</span><code id="mcpToken">••••••••••••</code><button class="ghost" id="tokenShow">Show</button><button class="ghost" id="tokenCopy">Copy</button></div>
 
+      <div class="row" style="margin:6px 0 0">
+        <button class="ghost" id="tokenReset">Reset token…</button>
+        <span class="muted">Makes the old token stop working (use it if the token leaked).</span>
+      </div>
+
       <h3>Claude Code</h3>
       <pre id="cmdCode"></pre>
       <button class="ghost" data-copy="cmdCode">Copy command</button>
@@ -186,6 +211,14 @@
       <div id="toolList"></div>
       <h3>Try asking</h3>
       <ul class="prompts" id="prompts"></ul>
+    </section>
+
+    <section class="card askcard">
+      <h2>Ask me first</h2>
+      <p class="hint" style="margin:0 0 10px">When Claude asks Recme to do one of these, Recme shows a dialog and waits for your answer.</p>
+      <label class="check"><input type="checkbox" id="askSend"> Sending files to another device</label>
+      <label class="check"><input type="checkbox" id="askDelete"> Deleting recordings</label>
+      <label class="check"><input type="checkbox" id="askCapture"> Recording or taking screenshots, and seeing window titles</label>
     </section>
 
     <section class="card activity">

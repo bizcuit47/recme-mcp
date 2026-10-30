@@ -85,7 +85,7 @@ class Editor {
    * mode "fast": no re-encoding; cuts snap to keyframes.
    * audio: "keep" | "remove"
    */
-  async exportVideo({ name, segments, audio = 'keep', mode = 'precise', output }, onProgress) {
+  async exportVideo({ name, segments, audio = 'keep', mode = 'precise', output, target_mb, max_width }, onProgress) {
     const src = this.info(name);
     if (!src.hasVideo) throw new Error('This file has no video');
     const segs = this.normalizeSegments(segments, src.duration);
@@ -104,20 +104,77 @@ class Editor {
         fs.rmSync(list, { force: true });
       }
     } else {
-      let fc = '';
-      segs.forEach((s, i) => {
-        fc += `[0:v]trim=start=${s.start.toFixed(3)}:end=${s.end.toFixed(3)},setpts=PTS-STARTPTS[v${i}];`;
-        if (keepAudio) fc += `[0:a]atrim=start=${s.start.toFixed(3)}:end=${s.end.toFixed(3)},asetpts=PTS-STARTPTS[a${i}];`;
-      });
-      fc += segs.map((_, i) => (keepAudio ? `[v${i}][a${i}]` : `[v${i}]`)).join('')
-        + `concat=n=${segs.length}:v=1:a=${keepAudio ? 1 : 0}[vc]${keepAudio ? '[a]' : ''};[vc]format=yuv420p[v]`;
-      const encoder = this.recorder.pickEncoder('auto');
-      const args = ['-i', src.path, '-filter_complex', fc, '-map', '[v]'];
-      if (keepAudio) args.push('-map', '[a]', '-c:a', 'aac', '-b:a', '192k');
-      args.push(...encoderArgs(encoder, 18), '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-movflags', '+faststart', out);
-      await this.run(args, total, onProgress);
+      const buildFilter = (maxW) => {
+        let fc = '';
+        segs.forEach((s, i) => {
+          fc += `[0:v]trim=start=${s.start.toFixed(3)}:end=${s.end.toFixed(3)},setpts=PTS-STARTPTS[v${i}];`;
+          if (keepAudio) fc += `[0:a]atrim=start=${s.start.toFixed(3)}:end=${s.end.toFixed(3)},asetpts=PTS-STARTPTS[a${i}];`;
+        });
+        fc += segs.map((_, i) => (keepAudio ? `[v${i}][a${i}]` : `[v${i}]`)).join('')
+          + `concat=n=${segs.length}:v=1:a=${keepAudio ? 1 : 0}[vc]${keepAudio ? '[a]' : ''};`
+          + `[vc]${maxW ? `scale='min(${maxW},iw)':-2,` : ''}format=yuv420p[v]`;
+        return fc;
+      };
+      const wantSize = Number(target_mb) > 0;
+      const audioK = wantSize ? 96 : 192;
+      const encode = async (vkbps, maxW) => {
+        const args = ['-i', src.path, '-filter_complex', buildFilter(maxW), '-map', '[v]'];
+        if (keepAudio) args.push('-map', '[a]', '-c:a', 'aac', '-b:a', `${audioK}k`);
+        if (wantSize) {
+          // Aim for a file size: average bitrate with libx264 (the same on every machine, unlike hardware encoders).
+          args.push('-c:v', 'libx264', '-preset', 'medium', '-profile:v', 'high', '-b:v', `${vkbps}k`, '-maxrate', `${Math.round(vkbps * 1.15)}k`, '-bufsize', `${vkbps * 2}k`);
+        } else {
+          args.push(...encoderArgs(this.recorder.pickEncoder('auto'), 18));
+        }
+        args.push('-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-movflags', '+faststart', out);
+        await this.run(args, total, onProgress);
+      };
+
+      const cap = Number(max_width) > 0 ? Math.floor(Number(max_width) / 2) * 2 : null;
+      if (!wantSize) {
+        await encode(0, cap && cap < src.width ? cap : null);
+      } else {
+        const targetBytes = Number(target_mb) * 1024 * 1024;
+        let vkbps = Math.max(80, Math.floor((targetBytes * 0.93 * 8 / total - audioK * 1000) / 1000));
+        // Keep about 0.07 bits per pixel: a tiny budget gets a smaller picture instead of blocky mush.
+        const fps = Math.min(src.fps || 30, 30);
+        let w = Math.floor(Math.sqrt(((vkbps * 1000) / (fps * 0.07)) * (src.width / src.height)) / 2) * 2;
+        w = Math.max(320, Math.min(src.width, w, cap || src.width));
+        const maxW = w < src.width ? w : null;
+        await encode(vkbps, maxW);
+        let size = fs.statSync(out).size;
+        if (size > targetBytes) {
+          // Over the limit: one more try with the bitrate scaled down by how far it overshot.
+          vkbps = Math.max(60, Math.floor(vkbps * (targetBytes / size) * 0.92));
+          await encode(vkbps, maxW);
+          size = fs.statSync(out).size;
+        }
+      }
     }
-    return { file: out, name: path.basename(out), duration_seconds: Math.round(total * 10) / 10, size_bytes: fs.statSync(out).size, mode, audio: keepAudio ? 'kept' : 'removed' };
+    const size = fs.statSync(out).size;
+    const res = { file: out, name: path.basename(out), duration_seconds: Math.round(total * 10) / 10, size_bytes: size, mode, audio: keepAudio ? 'kept' : 'removed' };
+    if (Number(target_mb) > 0 && mode !== 'fast') { res.target_mb = Number(target_mb); res.within_target = size <= Number(target_mb) * 1024 * 1024; }
+    return res;
+  }
+
+  /** One picture with evenly spaced frames (left to right, top to bottom) so the whole clip can be understood at a glance. */
+  contactSheet(name, count = 9, width = 480) {
+    const src = this.info(name);
+    if (!src.hasVideo) throw new Error('This file has no video');
+    count = Math.min(25, Math.max(4, Math.round(Number(count) || 9)));
+    width = Math.min(960, Math.max(240, Math.round(Number(width) || 480)));
+    const cols = Math.ceil(Math.sqrt(count));
+    const rows = Math.ceil(count / cols);
+    const step = src.duration / count;
+    const times = Array.from({ length: count }, (_, i) => Math.round((i + 0.5) * step * 100) / 100);
+    const tmp = path.join(os.tmpdir(), `recme-sheet-${Date.now()}.png`);
+    const r = spawnSync(this.ffmpeg, ['-hide_banner', '-y', '-v', 'error', '-ss', (step / 2).toFixed(3), '-i', src.path,
+      '-vf', `fps=1/${step.toFixed(4)},scale=${width}:-2,tile=${cols}x${rows}:padding=4:color=black`, '-frames:v', '1', tmp],
+    { windowsHide: true, encoding: 'utf8', timeout: 60000 });
+    if (r.status !== 0 || !fs.existsSync(tmp)) throw new Error(`Could not build the overview: ${(r.stderr || '').trim().split(/\r?\n/).pop()}`);
+    const png = fs.readFileSync(tmp);
+    fs.rmSync(tmp, { force: true });
+    return { png, times, cols, rows, duration: src.duration };
   }
 
   /** Waveform picture of the audio track (PNG data URL) for the timeline. */

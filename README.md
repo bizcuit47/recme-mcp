@@ -1,8 +1,30 @@
 # Recme
 
-Screen recorder for Windows with a **built-in MCP server**, so Claude can start/stop recordings, take screenshots and review the videos.
+**A screen recorder for Windows that Claude can drive.** Recme has its own MCP server built in: connect it once and Claude can start and stop recordings, look at screenshots and frames of what it recorded, cut and rearrange clips, pull the audio out, shrink a file for sharing, and send it to a nearby device. Sharp native-resolution capture, record any area you drag out (or a saved one by name), built-in editor, Wi-Fi sharing. Everything stays on your computer.
 
-## Run
+### ⬇️ [Download Recme for Windows](https://github.com/bizcuit47/Recme/releases/latest)
+
+Get **`Recme-Setup-<version>.exe`** from the latest release, run it, done (ffmpeg is included; no other install needed). Windows 10/11, 64-bit. The installer is not code-signed, so SmartScreen may warn: *More info → Run anyway*. SHA-256 of each installer is in the release notes.
+
+![Recme tour: record, library, editor, share, Claude](docs/demo.gif)
+
+> 📖 How it works / what it is built with (Thai): [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md)
+
+## Why Recme
+
+- **Made to be used with Claude.** 20 MCP tools: record, screenshot, "show me the whole clip in one picture", cut, extract audio, compress to a size limit, send. Sensitive actions (send, delete, optionally capture) can ask you first.
+- **Sharp by default.** Records at your screen's native resolution (e.g. 2880×1800), never downscales, uses your GPU encoder (NVENC / QSV / AMF) when there is one.
+- **Record exactly what you need.** Whole desktop, one monitor, a dragged area (a red frame shows it while recording, not part of the video), a saved area ("game"), or "wherever that window is right now".
+- **System sound and microphone**, merged into the MP4.
+- **A small editor.** Split, trim, drag pieces to rearrange, waveform lane, "detach audio" in one click, export to fit under 8 / 25 / 100 MB.
+- **Share on Wi-Fi.** LocalSend-style transfers with HTTPS, optional PIN and trusted devices.
+- **Stays out of the way.** Lives in the system tray, global hotkey (default `Ctrl+Shift+R`), optional start with Windows.
+
+## Install
+
+**From an installer:** run `Recme-Setup-<version>.exe` (it already contains ffmpeg). It is not code-signed, so Windows SmartScreen may warn: *More info → Run anyway*.
+
+**From source:**
 
 ```bash
 npm install
@@ -10,39 +32,11 @@ node node_modules/electron/install.js   # only if npm skipped Electron's downloa
 npm start
 ```
 
-Requires `ffmpeg` on the machine (`winget install Gyan.FFmpeg`). Recme finds it on PATH or in the WinGet folder, or use `FFMPEG_PATH`.
-
-Videos are saved to `C:\Users\<you>\Videos\Recme` (changeable in the app).
-
-## Build the installer (.exe)
-
-```bash
-npm install
-npm run dist
-```
-
-Creates `dist/Recme-Setup-1.0.0.exe` (Windows installer, per-user, ~180 MB). It bundles ffmpeg and ffprobe (copied from your own install by `npm run prepare:ffmpeg`), so the installed app needs nothing else. `dist/win-unpacked/Recme.exe` is the same app without installing.
-
-- The installer is **not code-signed**, so Windows SmartScreen may warn ("More info" → "Run anyway").
-- The bundled ffmpeg is a GPL build (x264). Fine for your own use; if you hand the installer to others, you must follow the GPL (include the licence and offer the ffmpeg source), or swap in an LGPL ffmpeg build.
-- The installed app shares settings with the dev version (`%APPDATA%\Recme`).
-
-## Sharp output
-
-- Captures at the screen's **native resolution** (e.g. 2880×1800) – never downscaled, only cropped to even dimensions.
-- H.264, BT.709 colour tags, cursor included.
-- Presets: Standard (CRF 23, 30 fps), **High (CRF 18, 30 fps – default)**, Ultra (CRF 14, 60 fps).
-- **Custom area**: choose *Custom area…* as the source, click *Select area on screen…* and drag a box (move it, resize it with the handles, Enter to confirm), or type X/Y/W/H or pick a size preset. A red frame is shown just outside the area while recording, and is not part of the video.
-- **System sound** (what you hear) is recorded by default and merged into the MP4 when you stop. Microphone is optional.
-- **Editor** (*Edit* button on a recording): player with a video lane and an audio lane (with waveform). The timeline shows the pieces one after another (*View: gaps closed*, like the exported video); the *View* button switches to the original positions. **Drag a blue piece sideways to rearrange the pieces** (a green marker shows where it lands; the *Move* buttons or Alt+arrows do the same). Click or drag anywhere on the timeline, or use the slider under the video, to move. *Save audio only* and *Detach audio from video* (sound file + muted copy) sit right under the timeline. Split at the playhead (S), drag piece edges or trim to playhead ([ and ]), remove pieces (Del), undo (Ctrl+Z). The preview skips removed parts. Export a new MP4 (precise re-encode, or fast keyframe cut), mute it, or **save the audio only** as M4A / MP3 / WAV / FLAC. The original is never changed.
-- **Menu**: Record · Library (files, edit, send, delete) · Share · Claude (MCP connection, tools, activity).
-- **Share on Wi-Fi** (Share tab, or *Send* on a recording; add any file from the computer with *Browse* or drag & drop, several at once): finds devices on the same network and sends files to them using the LocalSend v2 protocol. The receiver must accept each transfer; received files go to `Received` inside the recordings folder.
-- Hardware encoder (NVENC / QSV / AMF) is detected and used automatically when available, otherwise libx264.
-- Output is fragmented MP4, so a recording stays playable even if the app crashes.
+From source you need `ffmpeg` on the PC (`winget install Gyan.FFmpeg`). Recordings go to `Videos\Recme` (changeable in the Library tab).
 
 ## Connect Claude
 
-The app listens on `http://127.0.0.1:7777/mcp` (localhost only) and requires a bearer token. The **Claude connection** panel in the app shows ready-to-copy settings with your token.
+The app listens on `http://127.0.0.1:7777/mcp` (this computer only) and needs a token. The **Claude** tab shows ready-to-copy commands with your token.
 
 **Claude Code**
 
@@ -50,45 +44,62 @@ The app listens on `http://127.0.0.1:7777/mcp` (localhost only) and requires a b
 claude mcp add --transport http recme http://127.0.0.1:7777/mcp --header "Authorization: Bearer <TOKEN>"
 ```
 
-**Claude Desktop** – copy the JSON from the app into `claude_desktop_config.json` (uses `mcp-remote` to bridge to the HTTP server).
+**Claude Desktop**: copy the JSON from the Claude tab into `claude_desktop_config.json` (it uses `mcp-remote` as a bridge).
 
-Keep Recme running while Claude uses it.
+Keep Recme running (it hides in the tray when you close the window). Then try:
 
-## MCP tools
+- *"Record my screen for 15 seconds, then show me an overview of the clip."*
+- *"Record the `game` area for 20 seconds."*
+- *"Cut the last recording to the first 10 seconds and save only the audio as MP3."*
+- *"Make my latest recording small enough to send in a chat (under 25 MB)."*
 
-| Tool | What it does |
-| --- | --- |
-| `start_recording` | Start recording (quality, fps, source: desktop/display/window/region, `system_audio`, microphone `audio_device`, encoder, `max_seconds`) |
-| `stop_recording` | Finish the file, returns path/duration/size |
-| `get_status` | Current state, elapsed time, file size |
-| `take_screenshot` | Capture now; returns an image and saves the full-res PNG |
-| `list_displays` / `list_audio_devices` | Capture sources |
-| `list_recordings` / `get_recording_info` | Browse files, codec/resolution/bitrate |
-| `get_recording_frame` | View a frame of a recording at a given time |
-| `trim_recording` | Cut/join pieces of a recording into a new MP4 (`segments`, `audio`, `mode`) |
-| `extract_audio` | Save the audio (optionally only some pieces) as m4a/mp3/wav/flac |
-| `list_nearby_devices` | Devices on the same network that can receive files |
-| `send_recording` | Send a file to a nearby device (they must accept) |
-| `delete_recording` | Delete a file |
+### MCP tools (20)
 
-Try: *"Record my screen for 10 seconds at ultra quality, then show me a frame from the middle."*
+| Group | Tools |
+|---|---|
+| Record | `start_recording`, `stop_recording`, `get_status`, `take_screenshot`, `list_displays`, `list_audio_devices` |
+| Where to record | `list_areas`, `save_area`, `delete_area`, `list_windows` |
+| Review | `get_recording_overview`, `list_recordings`, `get_recording_info`, `get_recording_frame` |
+| Edit | `trim_recording` (cut / join / reorder), `extract_audio`, `compress_recording` |
+| Share | `list_nearby_devices`, `send_recording` |
+| Library | `delete_recording` |
 
-## Network sharing notes
+Sources for `start_recording` / `take_screenshot`: `desktop`, `display`, `region`, `area` (saved name), `window_area` (where a window is now), `window`.
 
-- Recme listens on TCP 53317 (or the next free port if LocalSend is already running) and UDP 53317 multicast. Allow it in the Windows firewall for *Private* networks when asked.
-- Discovery uses multicast; on Wi-Fi that blocks it (some guest/office networks) press **Find devices** to scan the local subnet.
-- Receiving is encrypted (HTTPS, self-signed certificate; the device fingerprint is the certificate's SHA-256, as in LocalSend) and senders verify it. Turn it off in Share → Receiving only if an old device cannot connect.
-- Optional **PIN** (rate limited) and **trusted devices** (accepted without asking). Trust is based on the device's announced fingerprint and address, so only trust your own devices.
-- Compatibility with the LocalSend app follows its published v2 protocol. Recme talks to a real LocalSend's HTTPS info endpoint and verifies its certificate; a full file transfer to/from the real app is untested.
-- **System tray**: closing the window keeps Recme running (Claude connection, sharing) in the tray; quit from the tray icon. Options (and start with Windows) are in Record → App.
-- Only private-network addresses are accepted, filenames are sanitised, and nothing is written before you press Accept.
+Videos cannot be returned to a chat as video: Claude gets frames and overviews as pictures and the file path as text. In the Claude Code desktop app it can also hand you the file.
+
+## Sharing on Wi-Fi
+
+Send any file to another PC or phone on the same network (Recme or [LocalSend](https://localsend.org/)). Drag files in or pick them from the library; the other side must accept every transfer. Receiving is encrypted (HTTPS), supports a PIN and "trusted devices", and saves into a folder you choose. Multicast discovery works on most home networks; press **Find devices** to scan the subnet when it does not.
+
+## Build the installer
+
+```bash
+npm run dist       # icon + copies your ffmpeg into vendor/ + electron-builder
+```
+
+Output: `dist/Recme-Setup-<version>.exe` (~180 MB, per-user). `dist/win-unpacked/Recme.exe` is the same app unpacked.
+
+The bundled ffmpeg is a **GPL** build. That is fine for your own use; if you hand the installer to others, follow the GPL (license text and source offer) or swap in an LGPL build. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+## Tests
+
+```bash
+npm run test:edit    # no app needed: cutting, reordering, size limit, audio, file transfer, HTTPS, PIN, trust
+npm run test:mcp     # app running: the MCP tools and token check
+npm run test:audio   # app running: records an area while a sound plays and checks it is in the file
+```
 
 ## Security
 
-The server binds to 127.0.0.1 only, requires the token, and rejects requests with an `Origin` header or foreign `Host`, so web pages cannot control it. The token lives in `%APPDATA%\Recme\config.json`.
+- The MCP server binds to `127.0.0.1`, needs the bearer token, and rejects requests with an `Origin` header or a foreign `Host`, so web pages cannot drive it. **Reset token** in the Claude tab replaces it.
+- Tools that send or delete files can ask for your confirmation first (on by default); capture tools can too.
+- File receiving: private-network addresses only, HTTPS with certificate pinning by fingerprint, PIN with rate limiting, sanitised file names, nothing written before you accept (unless the device is trusted).
 
-## Test
+## Known limits
 
-`npm run test:edit` (no app needed: cutting, audio extraction and file transfer between two nodes).
+Windows only. `gdigrab` reaches about 28–29 fps at 2880×1800. System sound is merged when you stop. The editor is basic (no text, transitions or multi-track). Not yet verified: transfers between two real devices and with the real LocalSend app, recording on multi-monitor setups, the installer itself.
 
-With the app running: `npm run test:mcp` (tools) and `npm run test:audio` (records an area while a sound plays and checks the audio is in the file)
+## License
+
+MIT for Recme's own code (see [LICENSE](LICENSE)). Bundled FFmpeg and other components: see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

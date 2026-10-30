@@ -10,9 +10,13 @@ const { z } = require('zod');
 
 const sourceSchema = z
   .object({
-    type: z.enum(['desktop', 'display', 'window', 'region']).describe('desktop = all screens, display = one monitor, window = a window by title, region = a pixel rectangle'),
+    type: z.enum(['desktop', 'display', 'window', 'region', 'area', 'window_area']).describe(
+      'desktop = all screens, display = one monitor, region = a pixel rectangle, ' +
+      'area = a saved area by name (see list_areas), window_area = the screen rectangle a window occupies right now (part of the title is enough; see list_windows), ' +
+      'window = capture one window by its exact title (may come out black for GPU-drawn windows, prefer window_area)'),
+    name: z.string().optional().describe('Saved area name (type=area)'),
     index: z.number().int().optional().describe('Display index from list_displays (type=display)'),
-    title: z.string().optional().describe('Exact window title (type=window)'),
+    title: z.string().optional().describe('Window title (type=window: exact; type=window_area: part of the title is enough)'),
     x: z.number().int().optional(),
     y: z.number().int().optional(),
     width: z.number().int().optional(),
@@ -29,7 +33,7 @@ function safe(fn) {
   };
 }
 
-function buildServer({ recorder, editor, share, getDisplays, resizeImage }) {
+function buildServer({ recorder, editor, share, getDisplays, resizeImage, areas, windows, confirm }) {
   const server = new McpServer({ name: 'recme', version: '1.0.0' });
 
   server.registerTool('get_status', {
@@ -68,7 +72,10 @@ function buildServer({ recorder, editor, share, getDisplays, resizeImage }) {
       encoder: z.enum(['auto', 'libx264', 'h264_nvenc', 'h264_qsv', 'h264_amf']).optional().describe('Default auto (hardware if available, else libx264)'),
       max_seconds: z.number().positive().optional().describe('Automatically stop after this many seconds'),
     },
-  }, safe(async (args) => text(await recorder.start(args))));
+  }, safe(async (args) => {
+    await confirm('capture', 'Claude wants to start recording your screen.');
+    return text(await recorder.start(args));
+  }));
 
   server.registerTool('stop_recording', {
     title: 'Stop screen recording',
@@ -86,6 +93,7 @@ function buildServer({ recorder, editor, share, getDisplays, resizeImage }) {
     },
     annotations: { readOnlyHint: true },
   }, safe(async ({ source, cursor, max_width }) => {
+    await confirm('capture', 'Claude wants to take a screenshot of your screen.');
     const file = recorder.screenshot({ source, cursor });
     const preview = await resizeImage(file, max_width || 1600);
     return {
@@ -178,7 +186,76 @@ function buildServer({ recorder, editor, share, getDisplays, resizeImage }) {
       || share.devices().find((d) => d.alias.toLowerCase().includes(q));
     if (!peer) throw new Error(`No nearby device matches "${device}". Call list_nearby_devices (scan=true) first.`);
     const file = recorder.resolveRecording(name);
+    await confirm('send', `Claude wants to send "${name}" to "${peer.alias}" (${peer.ip}).`);
     return text(await share.send(peer.id, [file], undefined, { pin: pin || '' }));
+  }));
+
+  server.registerTool('list_windows', {
+    title: 'List open windows',
+    description: 'Visible windows with their position and size on screen (physical pixels), front-most first. Use it to find e.g. the Unity window, then record it with source {type:"window_area", title:"Unity"}. ' +
+      'Titles can contain private information, so only call it when it is needed for the task.',
+    inputSchema: {},
+    annotations: { readOnlyHint: true },
+  }, safe(async () => {
+    await confirm('capture', 'Claude wants to see the list of open windows (their titles).');
+    return text(windows.list());
+  }));
+
+  server.registerTool('list_areas', {
+    title: 'List saved areas',
+    description: 'Named screen areas the user saved (for example "game" for the Game view of a Unity project). Record one with source {type:"area", name:"game"}.',
+    inputSchema: {},
+    annotations: { readOnlyHint: true },
+  }, safe(() => text(areas.list())));
+
+  server.registerTool('save_area', {
+    title: 'Save a named area',
+    description: 'Remember a screen rectangle under a name so it can be recorded later with source {type:"area", name}. Coordinates are physical pixels (see list_displays / list_windows). Saving an existing name replaces it.',
+    inputSchema: {
+      name: z.string().min(1).max(40),
+      x: z.number().int(),
+      y: z.number().int(),
+      width: z.number().int().min(16),
+      height: z.number().int().min(16),
+    },
+  }, safe(({ name, x, y, width, height }) => text(areas.save(name, { x, y, width, height }))));
+
+  server.registerTool('delete_area', {
+    title: 'Delete a saved area',
+    description: 'Forget a saved area by name.',
+    inputSchema: { name: z.string() },
+  }, safe(({ name }) => text(areas.remove(name))));
+
+  server.registerTool('compress_recording', {
+    title: 'Make a file small enough to share',
+    description: 'Create a smaller copy of a recording that fits under a size limit (for chat apps or email). Lowers resolution automatically when needed. The original is kept.',
+    inputSchema: {
+      name: z.string().describe('File name from list_recordings'),
+      target_mb: z.number().min(1).max(2000).describe('Maximum size in MB, e.g. 8, 25'),
+      max_width: z.number().int().min(320).optional().describe('Also cap the width in pixels (optional)'),
+      segments: segmentsSchema.optional(),
+    },
+  }, safe(async ({ name, target_mb, max_width, segments }) => text(await editor.exportVideo({ name, segments, target_mb, max_width }))));
+
+  server.registerTool('get_recording_overview', {
+    title: 'See a whole recording at a glance',
+    description: 'One picture with evenly spaced frames of a recording (left to right, top to bottom) plus the time of each frame. Cheaper than asking for frames one by one when you need to understand what happens in a clip.',
+    inputSchema: {
+      name: z.string().describe('File name from list_recordings'),
+      frames: z.number().int().min(4).max(25).optional().describe('Number of frames, default 9'),
+      width: z.number().int().min(240).max(960).optional().describe('Width of each frame in pixels, default 480'),
+    },
+    annotations: { readOnlyHint: true },
+  }, safe(async ({ name, frames, width }) => {
+    const file = recorder.resolveRecording(name);
+    const o = editor.contactSheet(path.basename(file), frames, width);
+    const list = o.times.map((t, i) => `${i + 1}: ${t.toFixed(1)}s`).join(', ');
+    return {
+      content: [
+        { type: 'image', data: o.png.toString('base64'), mimeType: 'image/png' },
+        { type: 'text', text: `${o.cols}x${o.rows} grid, read left to right then top to bottom. Clip length ${o.duration.toFixed(1)}s. Frame times: ${list}` },
+      ],
+    };
   }));
 
   server.registerTool('delete_recording', {
@@ -186,7 +263,12 @@ function buildServer({ recorder, editor, share, getDisplays, resizeImage }) {
     description: 'Permanently delete a recording from the output folder. Ask the user before calling this.',
     inputSchema: { name: z.string() },
     annotations: { destructiveHint: true },
-  }, safe(({ name }) => { recorder.deleteRecording(name); return text(`Deleted ${name}`); }));
+  }, safe(async ({ name }) => {
+    recorder.resolveRecording(name); // fail early if it does not exist
+    await confirm('delete', `Claude wants to permanently delete "${name}".`);
+    recorder.deleteRecording(name);
+    return text(`Deleted ${name}`);
+  }));
 
   return server;
 }
@@ -195,17 +277,20 @@ function buildServer({ recorder, editor, share, getDisplays, resizeImage }) {
  * Starts the local MCP endpoint (Streamable HTTP, stateless) on 127.0.0.1.
  * Protected by a bearer token plus Host/Origin checks so web pages cannot drive it.
  */
-function startMcpHttp({ port, token, recorder, editor, share, getDisplays, resizeImage, onActivity }) {
-  const tokenBuf = Buffer.from(token);
+function startMcpHttp({ port, getToken, recorder, editor, share, getDisplays, resizeImage, areas, windows, confirm, onActivity }) {
   const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
 
   const authorized = (req) => {
     const h = req.headers.authorization || '';
     const given = Buffer.from(h.startsWith('Bearer ') ? h.slice(7) : '');
+    const tokenBuf = Buffer.from(getToken()); // read every time so "reset token" takes effect immediately
     return given.length === tokenBuf.length && crypto.timingSafeEqual(given, tokenBuf);
   };
 
   const httpServer = http.createServer(async (req, res) => {
+    // One connection per request. Node closes idle keep-alive sockets after 5 s, and a client that reuses such a
+    // socket gets ECONNRESET on its next call (MCP clients pause for much longer than that between calls).
+    res.setHeader('Connection', 'close');
     const send = (code, body) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
 
     if (!allowedHosts.has(req.headers.host || '') || req.headers.origin) return send(403, { error: 'forbidden' });
@@ -223,7 +308,7 @@ function startMcpHttp({ port, token, recorder, editor, share, getDisplays, resiz
     let parsed;
     try { parsed = JSON.parse(body); } catch { return send(400, { error: 'invalid JSON' }); }
 
-    const server = buildServer({ recorder, editor, share, getDisplays, resizeImage });
+    const server = buildServer({ recorder, editor, share, getDisplays, resizeImage, areas, windows, confirm });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on('close', () => { transport.close(); server.close(); });
     try {

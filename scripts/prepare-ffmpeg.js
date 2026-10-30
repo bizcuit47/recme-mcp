@@ -27,3 +27,9 @@ for (const f of ['ffmpeg.exe', 'ffprobe.exe']) {
   fs.copyFileSync(from, path.join(dest, f));
   console.log('copied', f, (fs.statSync(from).size / 1e6).toFixed(0), 'MB');
 }
+// The GPL licence text that comes with the build must travel with the binaries.
+for (const f of ['LICENSE']) {
+  const from = path.join(dir, '..', f);
+  if (fs.existsSync(from)) { fs.copyFileSync(from, path.join(dest, f)); console.log('copied', f); }
+  else console.warn(`WARNING: ${f} not found next to the ffmpeg build; add it to vendor/ffmpeg manually before distributing`);
+}

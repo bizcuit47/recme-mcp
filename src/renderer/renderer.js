@@ -21,21 +21,21 @@ function showError(msg) {
 
 function render() {
   const rec = state.state === 'recording';
-  const stopping = state.state === 'stopping';
+  const stopping = state.state === 'stopping' || state.state === 'starting';
   $('dot').classList.toggle('on', rec);
   setBadge('bRec', rec ? true : '');
-  $('statePill').textContent = rec ? 'Recording' : stopping ? 'Saving…' : 'Idle';
+  $('statePill').textContent = rec ? 'Recording' : state.state === 'starting' ? 'Starting…' : stopping ? 'Saving…' : 'Idle';
   $('statePill').className = 'pill' + (rec ? ' rec' : '');
   $('timer').textContent = fmtTime(state.elapsed_seconds);
   const o = state.options;
   $('meta').textContent = rec && o
     ? `${o.fps} fps · ${o.encoder} · CRF ${o.crf} · ${fmtSize(state.size_bytes || 0)}`
-    : stopping ? 'Finalizing file…' : 'Ready to record';
+    : state.state === 'starting' ? 'Getting ready…' : stopping ? 'Finalizing file…' : 'Ready to record';
   const btn = $('recBtn');
-  btn.textContent = rec ? 'Stop recording' : stopping ? 'Saving…' : 'Start recording';
+  btn.textContent = rec ? 'Stop recording' : state.state === 'starting' ? 'Starting…' : stopping ? 'Saving…' : 'Start recording';
   btn.classList.toggle('stop', rec);
   btn.disabled = busy || stopping;
-  for (const id of ['source', 'quality', 'fps', 'encoder', 'audio', 'cursor', 'sysAudio', 'areaBtn', 'areaPreset', 'ax', 'ay', 'aw', 'ah']) $(id).disabled = rec || stopping;
+  for (const id of ['source', 'quality', 'fps', 'encoder', 'audio', 'cursor', 'sysAudio', 'areaBtn', 'areaPreset', 'ax', 'ay', 'aw', 'ah', 'sizeSave']) $(id).disabled = rec || stopping;
   if (state.last_error && !rec) showError(state.last_error);
   else if (state.warning) showError(state.warning);
 }
@@ -249,7 +249,14 @@ const TOOL_GROUPS = [
     ['list_displays', 'Monitors available for capture'],
     ['list_audio_devices', 'Microphones / inputs'],
   ]],
+  ['Where to record', [
+    ['list_areas', 'Saved named areas (e.g. "game")'],
+    ['save_area', 'Remember a screen rectangle under a name'],
+    ['delete_area', 'Forget a saved area'],
+    ['list_windows', 'Open windows and where they are'],
+  ]],
   ['Review', [
+    ['get_recording_overview', 'One picture with frames across the whole clip'],
     ['list_recordings', 'Files in your library'],
     ['get_recording_info', 'Resolution, codec, duration'],
     ['get_recording_frame', 'See a frame of a video at any time'],
@@ -257,6 +264,7 @@ const TOOL_GROUPS = [
   ['Edit', [
     ['trim_recording', 'Cut, trim or join pieces into a new MP4'],
     ['extract_audio', 'Save the sound as m4a / mp3 / wav / flac'],
+    ['compress_recording', 'Shrink a clip to fit under a size limit'],
   ]],
   ['Share', [
     ['list_nearby_devices', 'Devices on your Wi-Fi'],
@@ -271,6 +279,8 @@ const PROMPTS = [
   'Record my screen for 15 seconds, then show me a frame from the middle.',
   'Record the area 1280x720 at the top-left with system sound for 30 seconds.',
   'Cut the last recording to the first 10 seconds and save only the audio as MP3.',
+  'Record the "game" area for 20 seconds, then show me an overview of the clip.',
+  'Make my latest recording small enough to send in a chat (under 25 MB).',
   'Send my latest recording to Pim\'s phone.',
 ];
 
@@ -328,6 +338,22 @@ $('tokenCopy').onclick = async () => {
   setTimeout(() => { $('tokenCopy').textContent = 'Copy'; }, 1200);
 };
 $('logClear').onclick = () => { $('mcpLog').textContent = 'No calls yet'; };
+$('tokenReset').onclick = async () => {
+  if (!confirm('Reset the token? Claude (and anything else using the old token) will lose access until you add the new connection command.')) return;
+  const r = await window.recme.resetToken();
+  if (r.ok) { tokenShown = true; $('tokenShow').textContent = 'Hide'; renderMcp(r.data); }
+};
+
+// ---- what Claude has to ask about ----
+async function loadAsk() {
+  const r = await window.recme.ask.get();
+  if (!r.ok) return;
+  $('askSend').checked = r.data.send; $('askDelete').checked = r.data.delete; $('askCapture').checked = r.data.capture;
+}
+for (const [id, key] of [['askSend', 'send'], ['askDelete', 'delete'], ['askCapture', 'capture']]) {
+  $(id).onchange = () => window.recme.ask.set({ [key]: $(id).checked });
+}
+loadAsk();
 renderTools();
 
 async function init() {
@@ -626,5 +652,116 @@ window.recme.onMcpActivity((log) => {
   // Claude may have started/stopped a recording; keep the list fresh.
   refreshList();
 });
+
+// ---- my own size presets ----
+function applySize(w, h) {
+  area.w = w; area.h = h;
+  normalizeArea();
+  renderArea();
+}
+function renderSizes(list) {
+  const box = $('sizeChips');
+  box.replaceChildren();
+  if (!list.length) {
+    const hint = document.createElement('span');
+    hint.className = 'muted';
+    hint.textContent = 'none yet';
+    box.append(hint);
+  }
+  for (const s of list) {
+    const chip = document.createElement('span');
+    chip.className = 'sizechip';
+    const use = document.createElement('button');
+    use.textContent = `${s.width} × ${s.height}`;
+    use.title = 'Use this size';
+    use.onclick = () => applySize(s.width, s.height);
+    const del = document.createElement('button');
+    del.className = 'x';
+    del.textContent = '×';
+    del.title = 'Remove this size';
+    del.onclick = async () => { const r = await window.recme.sizes.remove(s); if (r.ok) renderSizes(r.data); };
+    chip.append(use, del);
+    box.append(chip);
+  }
+}
+$('sizeSave').onclick = async () => {
+  normalizeArea();
+  const r = await window.recme.sizes.save({ width: area.w, height: area.h });
+  if (r.ok) renderSizes(r.data); else showError(r.error);
+};
+(async () => { const r = await window.recme.sizes.list(); if (r.ok) renderSizes(r.data); })();
+
+// ---- saved areas ----
+let savedAreas = [];
+function renderSavedAreas(list) {
+  savedAreas = list;
+  const keep = $('savedAreas').value;
+  fill($('savedAreas'), [['', savedAreas.length ? 'Saved areas…' : 'No saved areas yet'], ...savedAreas.map((a) => [a.name, `${a.name} — ${a.width}×${a.height}`])]);
+  if (savedAreas.some((a) => a.name === keep)) $('savedAreas').value = keep;
+}
+async function loadAreas() { const r = await window.recme.areas.list(); if (r.ok) renderSavedAreas(r.data); }
+$('savedAreas').onchange = () => {
+  const a = savedAreas.find((x) => x.name === $('savedAreas').value);
+  if (!a) return;
+  Object.assign(area, { x: a.x, y: a.y, w: a.width, h: a.height });
+  $('areaName').value = a.name;
+  normalizeArea();
+  renderArea();
+};
+$('areaSave').onclick = async () => {
+  const name = $('areaName').value.trim();
+  if (!name) { $('areaName').focus(); return; }
+  normalizeArea();
+  const r = await window.recme.areas.save({ name, x: area.x, y: area.y, width: area.w, height: area.h });
+  if (r.ok) { renderSavedAreas(r.data); $('savedAreas').value = name; } else showError(r.error);
+};
+$('areaDelete').onclick = async () => {
+  const name = $('savedAreas').value;
+  if (!name || !confirm(`Delete the saved area "${name}"?`)) return;
+  const r = await window.recme.areas.remove(name);
+  if (r.ok) renderSavedAreas(r.data);
+};
+window.recme.on('areas:changed', renderSavedAreas);
+loadAreas();
+
+// ---- global hotkey ----
+const KEY_NAMES = { Space: 'Space', Enter: 'Enter', Tab: 'Tab', Backspace: 'Backspace', Delete: 'Delete', Insert: 'Insert', Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right' };
+function acceleratorFrom(e) {
+  let key = null;
+  if (/^Key[A-Z]$/.test(e.code)) key = e.code.slice(3);
+  else if (/^Digit\d$/.test(e.code)) key = e.code.slice(5);
+  else if (/^F\d{1,2}$/.test(e.code)) key = e.code;
+  else if (KEY_NAMES[e.code]) key = KEY_NAMES[e.code];
+  if (!key) return null; // a lone modifier or an unsupported key
+  const parts = [];
+  if (e.ctrlKey) parts.push('CommandOrControl');
+  if (e.altKey) parts.push('Alt');
+  if (e.shiftKey) parts.push('Shift');
+  if (e.metaKey) parts.push('Super');
+  if (!parts.length) return null;
+  return [...parts, key].join('+');
+}
+const prettyKeys = (a) => a.replace('CommandOrControl', 'Ctrl').replace(/\+/g, ' + ');
+function renderHotkey(h) {
+  $('hkOn').checked = h.enabled;
+  $('hkKeys').value = prettyKeys(h.accelerator);
+  $('hkKeys').disabled = !h.enabled;
+  $('hkState').textContent = !h.enabled ? 'off' : h.error ? h.error : 'active';
+  $('hkState').style.color = h.error ? '#ff8a95' : '';
+}
+async function loadHotkey() { const r = await window.recme.hotkey.get(); if (r.ok) renderHotkey(r.data); }
+$('hkOn').onchange = async () => { const r = await window.recme.hotkey.set({ enabled: $('hkOn').checked }); if (r.ok) renderHotkey(r.data); };
+$('hkReset').onclick = async () => { const r = await window.recme.hotkey.set({ accelerator: 'CommandOrControl+Shift+R' }); if (r.ok) renderHotkey(r.data); };
+$('hkKeys').onfocus = () => { $('hkKeys').classList.add('listening'); $('hkKeys').value = 'press the keys…'; };
+$('hkKeys').onblur = () => { $('hkKeys').classList.remove('listening'); loadHotkey(); };
+$('hkKeys').onkeydown = async (e) => {
+  e.preventDefault();
+  const acc = acceleratorFrom(e);
+  if (!acc) return;
+  const r = await window.recme.hotkey.set({ accelerator: acc, enabled: true });
+  $('hkKeys').blur();
+  if (r.ok) renderHotkey(r.data); else { $('hkState').textContent = r.error; $('hkState').style.color = '#ff8a95'; }
+};
+loadHotkey();
 
 init().then(() => loadShare(false));

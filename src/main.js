@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, screen, shell, clipboard, nativeImage, dialog, Tray, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, shell, clipboard, nativeImage, dialog, Tray, Menu, globalShortcut, Notification } = require('electron');
 const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
@@ -11,6 +11,7 @@ const { createSystemAudio } = require('./system-audio');
 const { Editor } = require('./editor');
 const { LanShare } = require('./lan-share');
 const { loadOrCreateCert } = require('./identity');
+const { listWindows, findWindow } = require('./windows');
 const { pathToFileURL } = require('url');
 
 app.setName('Recme');
@@ -48,6 +49,12 @@ function loadConfig() {
   cfg.pin = typeof cfg.pin === 'string' ? cfg.pin : '';
   cfg.trusted = Array.isArray(cfg.trusted) ? cfg.trusted : [];
   cfg.receiveDir = cfg.receiveDir || '';
+  cfg.areas = Array.isArray(cfg.areas) ? cfg.areas : []; // saved, named screen areas
+  cfg.sizePresets = Array.isArray(cfg.sizePresets) ? cfg.sizePresets : []; // the user's own width x height presets
+  cfg.hotkey = { enabled: true, accelerator: 'CommandOrControl+Shift+R', ...(cfg.hotkey || {}) };
+  // What Recme asks the user about when Claude (through MCP) wants to do it.
+  cfg.ask = { send: true, delete: true, capture: false, ...(cfg.ask || {}) };
+  cfg.lastStart = cfg.lastStart || null; // last recording settings, reused by the hotkey and the tray menu
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(cfg, null, 2));
   return cfg;
@@ -281,10 +288,10 @@ function updateTray() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Open Recme', click: showWindow },
     {
-      label: rec ? `Stop recording (${time})` : st.state === 'stopping' ? 'Saving…' : 'Start recording',
-      enabled: st.state !== 'stopping',
+      label: rec ? `Stop recording (${time})` : st.state === 'stopping' ? 'Saving…' : st.state === 'starting' ? 'Starting…' : 'Start recording',
+      enabled: st.state !== 'stopping' && st.state !== 'starting',
       click: async () => {
-        try { if (recorder.state === 'recording') await recorder.stop(); else await recorder.start({}); } catch (e) { tray.displayBalloon({ iconType: 'error', title: 'Recme', content: e.message }); }
+        await toggleRecording();
       },
     },
     { label: 'Open recordings folder', click: () => shell.openPath(recorder.outputDir) },
@@ -318,7 +325,68 @@ function registerIpc() {
     outputDir: recorder.outputDir,
     mcp: mcpInfo(),
   }));
-  handle('start', (opts) => recorder.start(opts));
+  handle('start', (opts) => {
+    const keep = {};
+    for (const k of ['quality', 'fps', 'encoder', 'system_audio', 'audio_device', 'cursor', 'source']) if (opts && opts[k] !== undefined) keep[k] = opts[k];
+    config.lastStart = keep; // the hotkey and the tray menu start with these
+    saveConfig();
+    return recorder.start(opts);
+  });
+
+  // ---- the user's own size presets (width x height) ----
+  const cleanSize = ({ width, height }) => {
+    const w = Math.round(Number(width));
+    const h = Math.round(Number(height));
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w < 16 || h < 16 || w > 16384 || h > 16384) throw new Error('Size must be between 16 and 16384 pixels');
+    return { width: w - (w % 2), height: h - (h % 2) }; // H.264 needs even sizes
+  };
+  handle('sizes:list', () => config.sizePresets);
+  handle('sizes:save', (size) => {
+    const s = cleanSize(size || {});
+    if (!config.sizePresets.some((p) => p.width === s.width && p.height === s.height)) {
+      if (config.sizePresets.length >= 12) throw new Error('You can keep up to 12 own sizes. Remove one first.');
+      config.sizePresets.push(s);
+      saveConfig();
+    }
+    return config.sizePresets;
+  });
+  handle('sizes:remove', (size) => {
+    const s = cleanSize(size || {});
+    config.sizePresets = config.sizePresets.filter((p) => !(p.width === s.width && p.height === s.height));
+    saveConfig();
+    return config.sizePresets;
+  });
+
+  // ---- saved areas ----
+  handle('areas:list', () => config.areas);
+  handle('areas:save', ({ name, x, y, width, height }) => areasApi.save(name, { x, y, width, height }));
+  handle('areas:remove', (name) => areasApi.remove(name));
+
+  // ---- hotkey ----
+  handle('hotkey:get', () => hotkeyInfo());
+  handle('hotkey:set', ({ enabled, accelerator }) => {
+    if (typeof accelerator === 'string' && accelerator.trim()) {
+      if (!/(Control|Ctrl|CommandOrControl|Alt|Shift|Super|Command)\+/i.test(accelerator)) throw new Error('Use at least one of Ctrl, Alt or Shift together with a key');
+      config.hotkey.accelerator = accelerator.trim();
+    }
+    if (typeof enabled === 'boolean') config.hotkey.enabled = enabled;
+    saveConfig();
+    registerHotkey();
+    return hotkeyInfo();
+  });
+
+  // ---- what Claude has to ask permission for ----
+  handle('ask:get', () => config.ask);
+  handle('ask:set', (v) => {
+    for (const k of ['send', 'delete', 'capture']) if (typeof (v || {})[k] === 'boolean') config.ask[k] = v[k];
+    saveConfig();
+    return config.ask;
+  });
+  handle('mcp:resetToken', () => {
+    config.token = crypto.randomBytes(24).toString('hex'); // the MCP server reads it on every request
+    saveConfig();
+    return mcpInfo();
+  });
   handle('stop', () => recorder.stop());
   handle('status', () => recorder.status());
   handle('list', () => recorder.listRecordings());
@@ -480,9 +548,94 @@ function openEditor(name) {
   w.loadFile(path.join(__dirname, 'editor', 'editor.html'), { query: { name } });
 }
 
+// ---- saved areas, windows, permission prompts, hotkey ----
+const areasApi = {
+  list: () => config.areas,
+  save(name, rect) {
+    name = String(name || '').trim().slice(0, 40);
+    if (!name) throw new Error('Give the area a name');
+    const r = recorder.clampRegion(rect);
+    config.areas = config.areas.filter((a) => a.name.toLowerCase() !== name.toLowerCase());
+    config.areas.push({ name, ...r });
+    saveConfig();
+    if (win && !win.isDestroyed()) win.webContents.send('areas:changed', config.areas);
+    return config.areas;
+  },
+  remove(name) {
+    const before = config.areas.length;
+    config.areas = config.areas.filter((a) => a.name.toLowerCase() !== String(name).toLowerCase());
+    if (config.areas.length === before) throw new Error(`No saved area called "${name}"`);
+    saveConfig();
+    if (win && !win.isDestroyed()) win.webContents.send('areas:changed', config.areas);
+    return config.areas;
+  },
+};
+const windowsApi = { list: () => listWindows() };
+
+function notify(body) {
+  try { if (Notification.isSupported()) new Notification({ title: 'Recme', body, silent: true }).show(); } catch { /* notifications unavailable */ }
+}
+
+async function toggleRecording() {
+  try {
+    if (recorder.state === 'recording') {
+      const r = await recorder.stop();
+      notify(`Saved ${path.basename(r.file)}`);
+    } else if (recorder.state === 'idle') {
+      await recorder.start(config.lastStart || {});
+      notify('Recording started');
+    } // 'starting' or 'stopping': a second key press must not start or stop twice
+  } catch (e) {
+    notify(`Could not ${recorder.state === 'recording' ? 'stop' : 'start'}: ${e.message}`);
+  }
+}
+
+let hotkeyError = '';
+function registerHotkey() {
+  globalShortcut.unregisterAll();
+  hotkeyError = '';
+  if (!config.hotkey.enabled) return;
+  let ok = false;
+  try { ok = globalShortcut.register(config.hotkey.accelerator, () => { toggleRecording(); }); } catch (e) { hotkeyError = e.message; }
+  if (!ok && !hotkeyError) hotkeyError = 'That key combination is already used by another program';
+}
+const hotkeyInfo = () => ({ enabled: config.hotkey.enabled, accelerator: config.hotkey.accelerator, error: hotkeyError });
+
+/**
+ * Ask the user before Claude does something sensitive (send / delete / capture), if they asked to be asked.
+ * Resolves when allowed; throws when denied or when nobody answers in time.
+ */
+async function confirmAction(kind, message) {
+  if (!config.ask || !config.ask[kind]) return true;
+  showWindow();
+  const timeoutMs = config.askTimeoutMs || 45000; // shorter than an MCP client's own request timeout
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    const answer = await Promise.race([
+      dialog.showMessageBox(win, {
+        type: 'question', title: 'Recme', message, detail: 'Allow it? You can change what Recme asks about in the Claude tab.',
+        buttons: ['Allow', 'Deny'], defaultId: 1, cancelId: 1, noLink: true, signal: ac.signal,
+      }),
+      new Promise((resolve) => setTimeout(() => resolve({ response: 1, timedOut: true }), timeoutMs + 500)),
+    ]);
+    if (answer.response === 0) return true;
+  } catch { /* dialog aborted by the timeout */ } finally { clearTimeout(timer); }
+  throw new Error('The user did not allow this in Recme (denied, or no answer in time).');
+}
+
 app.whenReady().then(async () => {
   config = loadConfig();
-  recorder = new Recorder({ outputDir: config.outputDir, ffmpegPath: config.ffmpegPath, getDisplays, systemAudio: createSystemAudio() });
+  const systemAudio = createSystemAudio();
+  systemAudio.warmUp().catch(() => {}); // not fatal: it is created again on demand
+  recorder = new Recorder({
+    outputDir: config.outputDir,
+    ffmpegPath: config.ffmpegPath,
+    getDisplays,
+    systemAudio,
+    getAreas: () => config.areas,
+    findWindow,
+  });
   recorder.detectEncoders();
   editor = new Editor(recorder);
   let identity = null;
@@ -512,12 +665,15 @@ app.whenReady().then(async () => {
   try {
     mcpServer = await startMcpHttp({
       port: config.port,
-      token: config.token,
+      getToken: () => config.token,
       recorder,
       editor,
       share,
       getDisplays,
       resizeImage,
+      areas: areasApi,
+      windows: windowsApi,
+      confirm: confirmAction,
       onActivity: (tool) => {
         mcpLog.push(`${new Date().toLocaleTimeString()}  ${tool}`);
         if (win && !win.isDestroyed()) win.webContents.send('mcp-activity', mcpInfo().log);
@@ -529,6 +685,7 @@ app.whenReady().then(async () => {
 
   registerIpc();
   createTray();
+  registerHotkey();
   // Started by Windows with --hidden: stay in the tray and only open the window when asked.
   createWindow(!(startHidden && tray));
 });
@@ -545,6 +702,6 @@ app.on('before-quit', async (e) => {
   app.quit();
 });
 
-app.on('will-quit', () => { if (share) share.stop(); });
+app.on('will-quit', () => { globalShortcut.unregisterAll(); if (share) share.stop(); });
 // With a tray icon the app keeps running without a window; without one, closing the window quits.
 app.on('window-all-closed', () => { if (!tray) app.quit(); });

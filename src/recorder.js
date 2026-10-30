@@ -56,8 +56,11 @@ class Recorder extends EventEmitter {
    * @param {string} [opts.ffmpegPath]
    * @param {() => Array} opts.getDisplays  returns [{index,label,x,y,width,height}] in physical pixels
    */
-  constructor({ outputDir, ffmpegPath, getDisplays, systemAudio }) {
+  constructor({ outputDir, ffmpegPath, getDisplays, systemAudio, getAreas, findWindow }) {
     super();
+    this.getAreas = getAreas || (() => []); // saved, named areas: [{ name, x, y, width, height }]
+    this.findWindow = findWindow || null; // (title) => { x, y, width, height } | null
+
     this.systemAudio = systemAudio || null; // { start(file) -> {startedAtMs}, stop() }
     this.warning = null;
     this.outputDir = outputDir;
@@ -138,8 +141,32 @@ class Recorder extends EventEmitter {
     return { x, y, width, height };
   }
 
+  /**
+   * Turn friendly sources into plain capture sources:
+   *   { type: 'area', name }          -> the saved area with that name
+   *   { type: 'window_area', title }  -> the screen rectangle the window occupies right now
+   */
+  resolveSource(source = { type: 'desktop' }) {
+    if (source.type === 'area') {
+      const a = this.getAreas().find((x) => x.name.toLowerCase() === String(source.name || '').toLowerCase());
+      if (!a) {
+        const names = this.getAreas().map((x) => x.name).join(', ') || 'none saved yet';
+        throw new Error(`No saved area called "${source.name}" (saved areas: ${names})`);
+      }
+      return { type: 'region', x: a.x, y: a.y, width: a.width, height: a.height };
+    }
+    if (source.type === 'window_area') {
+      if (!this.findWindow) throw new Error('Finding windows is not available here');
+      const w = this.findWindow(source.title);
+      if (!w) throw new Error(`No visible window with "${source.title}" in its title. Use list_windows to see what is open.`);
+      return { type: 'region', x: w.x, y: w.y, width: w.width, height: w.height };
+    }
+    return source;
+  }
+
   /** gdigrab input args for a capture source. Coordinates are physical pixels. */
   sourceArgs(source = { type: 'desktop' }) {
+    source = this.resolveSource(source);
     switch (source.type) {
       case 'display': {
         const d = this.getDisplays().find((x) => x.index === source.index);
@@ -170,7 +197,7 @@ class Recorder extends EventEmitter {
     const fps = Math.min(Math.max(Math.round(options.fps || preset.fps), 5), 120);
     const crf = options.crf ?? preset.crf;
     const encoder = this.pickEncoder(options.encoder);
-    let source = options.source || { type: 'desktop' };
+    let source = this.resolveSource(options.source || { type: 'desktop' });
     if (source.type === 'region') source = { type: 'region', ...this.clampRegion(source) };
     const audio = options.audio_device || null;
     const file = options.file || this.newFilePath('rec', 'mp4');
@@ -192,6 +219,9 @@ class Recorder extends EventEmitter {
     // System audio (what you hear from the speakers) is captured by the app's loopback worker,
     // because ffmpeg/gdigrab cannot capture it. It is muxed into the video when recording stops.
     this.warning = null;
+    // Setting up the sound capture can take a few seconds the first time: block a second start meanwhile.
+    this.state = 'starting';
+    this.emit('change');
     let sysAudio = null;
     if (options.system_audio !== false && this.systemAudio) {
       const audioFile = file.replace(/\.mp4$/i, '') + '.sysaudio.webm';
@@ -215,7 +245,15 @@ class Recorder extends EventEmitter {
     const current = this.current;
 
     let stderr = '';
-    const proc = spawn(ffmpeg, args, { windowsHide: true, stdio: ['pipe', 'ignore', 'pipe'] });
+    let proc;
+    try {
+      proc = spawn(ffmpeg, args, { windowsHide: true, stdio: ['pipe', 'ignore', 'pipe'] });
+    } catch (e) {
+      this.state = 'idle';
+      if (sysAudio) this.systemAudio.stop().catch(() => {});
+      this.emit('change');
+      throw e;
+    }
     this.proc = proc;
     proc.stderr.on('data', (b) => {
       stderr = (stderr + b.toString()).slice(-4000);

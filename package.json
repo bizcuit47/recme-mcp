@@ -32,7 +32,9 @@
     "directories": { "output": "dist", "buildResources": "build" },
     "files": ["src/**/*", "package.json"],
     "extraResources": [
-      { "from": "vendor/ffmpeg", "to": "ffmpeg", "filter": ["ffmpeg.exe", "ffprobe.exe"] }
+      { "from": "vendor/ffmpeg", "to": "ffmpeg", "filter": ["ffmpeg.exe", "ffprobe.exe", "LICENSE"] },
+      { "from": "THIRD-PARTY-NOTICES.md", "to": "THIRD-PARTY-NOTICES.md" },
+      { "from": "LICENSE", "to": "LICENSE.txt" }
     ],
     "win": {
       "icon": "build/icon.png",

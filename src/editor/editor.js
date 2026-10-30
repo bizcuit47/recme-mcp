@@ -429,7 +429,7 @@ function addResult(d) {
   const box = document.createElement('div');
   box.className = 'result-item';
   const line = document.createElement('div');
-  line.textContent = `Saved ${d.name} (${(d.size_bytes / 1e6).toFixed(1)} MB)`;
+  line.textContent = `Saved ${d.name} (${(d.size_bytes / 1e6).toFixed(1)} MB)${d.target_mb ? (d.within_target ? ` · under ${d.target_mb} MB ✓` : ` · over the ${d.target_mb} MB limit`) : ''}`;
   const row = document.createElement('div');
   row.className = 'row';
   const mk = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.onclick = fn; return b; };
@@ -441,11 +441,11 @@ function addResult(d) {
 const coversWholeClip = () => segs.length === 1 && segs[0].start < 0.05 && segs[0].end > duration - 0.05;
 
 async function doExport(kind) {
-  busy(true, kind === 'audio' ? 'Extracting audio…' : 'Exporting…');
+  busy(true, kind === 'audio' ? 'Extracting audio…' : $('sizeLimit').value ? `Exporting under ${$('sizeLimit').value} MB…` : 'Exporting…');
   const payload = { name: info.name, segments: segs };
   const r = kind === 'audio'
     ? await window.editor.extractAudio({ ...payload, format: $('audioFormat').value })
-    : await window.editor.exportVideo({ ...payload, audio: $('audioMode').value, mode: $('mode').value });
+    : await window.editor.exportVideo({ ...payload, audio: $('audioMode').value, mode: $('mode').value, target_mb: Number($('sizeLimit').value) || undefined });
   busy(false);
   if (!r.ok) return showError(r.error);
   addResult(r.data);
