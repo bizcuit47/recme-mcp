@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+  <title>Select area</title>
+  <link rel="stylesheet" href="overlay.css">
+</head>
+<body>
+  <div id="hint">Drag to select the recording area · drag the box to move, drag the handles to resize · <b>Enter</b> or double-click to confirm · <b>Esc</b> to cancel</div>
+  <div id="sel" hidden>
+    <div id="size"></div>
+    <div class="h nw" data-h="nw"></div><div class="h n" data-h="n"></div><div class="h ne" data-h="ne"></div>
+    <div class="h w" data-h="w"></div><div class="h e" data-h="e"></div>
+    <div class="h sw" data-h="sw"></div><div class="h s" data-h="s"></div><div class="h se" data-h="se"></div>
+    <div id="bar">
+      <button id="ok">Use this area</button>
+      <button id="cancel">Cancel</button>
+    </div>
+  </div>
+  <script src="overlay.js"></script>
+</body>
+</html>

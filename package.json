@@ -1,0 +1,51 @@
+{
+  "name": "recme",
+  "productName": "Recme",
+  "version": "1.0.0",
+  "description": "Recme - screen recorder with a built-in MCP server so Claude can control it",
+  "author": "Recme",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "icon": "node scripts/make-icon.js",
+    "prepare:ffmpeg": "node scripts/prepare-ffmpeg.js",
+    "dist": "npm run icon && npm run prepare:ffmpeg && electron-builder --win nsis --x64",
+    "test:mcp": "node scripts/test-mcp.js",
+    "test:audio": "node scripts/test-audio.js",
+    "test:edit": "node scripts/test-edit-share.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "selfsigned": "^5.5.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.recme.app",
+    "productName": "Recme",
+    "copyright": "Recme",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["src/**/*", "package.json"],
+    "extraResources": [
+      { "from": "vendor/ffmpeg", "to": "ffmpeg", "filter": ["ffmpeg.exe", "ffprobe.exe"] }
+    ],
+    "win": {
+      "icon": "build/icon.png",
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Recme",
+      "artifactName": "Recme-Setup-${version}.exe"
+    }
+  }
+}

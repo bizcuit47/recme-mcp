@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recme</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="dot" id="dot"></span><h1>Recme</h1></div>
+
+    <nav id="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="record">Record <span class="badge rec" id="bRec" hidden></span></button>
+      <button class="tab" role="tab" data-tab="library">Library <span class="badge" id="bLib" hidden></span></button>
+      <button class="tab" role="tab" data-tab="share">Share <span class="badge" id="bShare" hidden></span></button>
+      <button class="tab" role="tab" data-tab="claude">Claude <span class="badge ok" id="bMcp" hidden></span></button>
+    </nav>
+
+    <div class="pill" id="statePill">Idle</div>
+  </header>
+
+  <!-- ================= Record ================= -->
+  <main class="page" data-page="record">
+    <section class="card record">
+      <div class="timer" id="timer">00:00:00</div>
+      <div class="meta" id="meta">Ready to record</div>
+      <button id="recBtn" class="rec">Start recording</button>
+      <div class="err" id="err" hidden></div>
+    </section>
+
+    <section class="card settings">
+      <h2>Settings</h2>
+      <label>Source
+        <select id="source"></select>
+      </label>
+      <div id="areaBox" class="area" hidden>
+        <div class="row">
+          <button id="areaBtn">Select area on screen…</button>
+          <select id="areaPreset" title="Set size">
+            <option value="">Size preset</option>
+            <option value="1920x1080">1920 × 1080</option>
+            <option value="1280x720">1280 × 720</option>
+            <option value="1024x768">1024 × 768</option>
+            <option value="800x600">800 × 600</option>
+            <option value="display">Full display</option>
+          </select>
+        </div>
+        <div class="coords">
+          <label>X <input type="number" id="ax" step="2"></label>
+          <label>Y <input type="number" id="ay" step="2"></label>
+          <label>W <input type="number" id="aw" min="16" step="2"></label>
+          <label>H <input type="number" id="ah" min="16" step="2"></label>
+        </div>
+        <p class="hint" id="areaHint"></p>
+      </div>
+      <label>Quality
+        <select id="quality"></select>
+      </label>
+      <label>Frame rate
+        <select id="fps">
+          <option value="">Preset default</option>
+          <option>24</option><option>30</option><option>60</option>
+        </select>
+      </label>
+      <label>Encoder
+        <select id="encoder"></select>
+      </label>
+      <label class="check"><input type="checkbox" id="sysAudio" checked> Record system sound (what you hear)</label>
+      <label>Microphone
+        <select id="audio"></select>
+      </label>
+      <label class="check"><input type="checkbox" id="cursor" checked> Show mouse cursor</label>
+      <p class="hint">Captures at your screen's native resolution with no downscaling, so text stays sharp.</p>
+    </section>
+
+    <section class="card appset">
+      <h2>App</h2>
+      <label class="check"><input type="checkbox" id="closeTray"> Keep Recme running in the system tray when I close the window</label>
+      <label class="check"><input type="checkbox" id="autostart"> Start Recme when Windows starts</label>
+      <label class="check sub"><input type="checkbox" id="startHidden"> …and start hidden in the tray</label>
+      <p class="hint" id="appHint">Running in the tray keeps the Claude connection and file receiving alive. Quit from the tray icon.</p>
+    </section>
+  </main>
+
+  <!-- ================= Library ================= -->
+  <main class="page one" data-page="library" hidden>
+    <section class="card files">
+      <div class="row">
+        <h2>Library</h2>
+        <span class="muted" id="libSummary"></span>
+        <span class="spacer"></span>
+        <div class="chips" id="libFilter">
+          <button class="chip on" data-filter="all">All</button>
+          <button class="chip" data-filter="video">Video</button>
+          <button class="chip" data-filter="audio">Audio</button>
+        </div>
+        <button id="folderBtn" class="ghost">Open folder</button>
+        <button id="pickBtn" class="ghost">Change folder</button>
+      </div>
+      <div class="path" id="outDir"></div>
+      <ul id="list"></ul>
+    </section>
+  </main>
+
+  <!-- ================= Share ================= -->
+  <main class="page one" data-page="share" hidden>
+    <section class="card share" id="shareCard">
+      <div class="row">
+        <h2>Share on Wi-Fi</h2>
+        <span class="spacer"></span>
+        <button id="scanBtn" class="ghost">Find devices</button>
+      </div>
+      <p class="hint">Send a clip to another PC or phone on the same Wi-Fi (works with Recme and LocalSend). The other side must accept every transfer.</p>
+      <div class="shareset">
+        <label>This device
+          <input type="text" id="alias" maxlength="40">
+        </label>
+        <label class="check"><input type="checkbox" id="receive"> Allow receiving</label>
+        <button id="recvFolder" class="ghost">Received files</button>
+      </div>
+      <h3>Files to send</h3>
+      <div class="addrow">
+        <select id="shareFile"></select>
+        <button id="addLib">Add from library</button>
+        <button id="browseBtn">Browse this computer…</button>
+      </div>
+      <div id="dropzone" class="drop">Drop files here to send them</div>
+      <ul id="staged"></ul>
+      <h3>Nearby devices</h3>
+      <ul id="devices"></ul>
+      <div id="shareProgress" hidden>
+        <div class="bar"><div id="shareBar"></div></div>
+        <div id="shareText" class="hint"></div>
+      </div>
+      <div class="err" id="shareErr" hidden></div>
+    </section>
+
+    <section class="card recv">
+      <h2>Receiving</h2>
+      <div class="kv2">
+        <span>Save to</span>
+        <code id="recvDir"></code>
+        <button class="ghost" id="recvChange">Change…</button>
+        <button class="ghost" id="recvOpen">Open</button>
+      </div>
+      <label class="check"><input type="checkbox" id="httpsOn"> Encrypt transfers (HTTPS) <span class="muted" id="httpsNote"></span></label>
+      <div class="kv2">
+        <span>PIN</span>
+        <input type="password" id="pinInput" inputmode="numeric" maxlength="12" placeholder="4–12 digits, empty = no PIN" autocomplete="off">
+        <button class="ghost" id="pinSave">Save</button>
+        <span class="muted" id="pinState"></span>
+      </div>
+      <h3>Trusted devices <small>(accepted without asking)</small></h3>
+      <ul id="trustedList"></ul>
+      <p class="hint">Trust a device from the Nearby devices list. Trusted devices still need the PIN if you set one. Anything else always asks you first.</p>
+    </section>
+  </main>
+
+  <!-- ================= Claude (MCP) ================= -->
+  <main class="page" data-page="claude" hidden>
+    <section class="card mcp">
+      <div class="row">
+        <h2>Connect Claude</h2>
+        <span class="spacer"></span>
+        <span class="pill" id="mcpPill">…</span>
+      </div>
+      <p class="hint">Recme runs its own MCP server on this computer. Add it to Claude once, keep Recme open, then ask Claude to record, edit or send clips for you.</p>
+
+      <h3>Server</h3>
+      <div class="kv"><span>Address</span><code id="mcpUrl"></code><button class="ghost" data-copy="mcpUrl">Copy</button></div>
+      <div class="kv"><span>Token</span><code id="mcpToken">••••••••••••</code><button class="ghost" id="tokenShow">Show</button><button class="ghost" id="tokenCopy">Copy</button></div>
+
+      <h3>Claude Code</h3>
+      <pre id="cmdCode"></pre>
+      <button class="ghost" data-copy="cmdCode">Copy command</button>
+
+      <h3>Claude Desktop <small>(claude_desktop_config.json)</small></h3>
+      <pre id="cmdDesktop"></pre>
+      <button class="ghost" data-copy="cmdDesktop">Copy config</button>
+    </section>
+
+    <section class="card tools">
+      <h2>What Claude can do</h2>
+      <div id="toolList"></div>
+      <h3>Try asking</h3>
+      <ul class="prompts" id="prompts"></ul>
+    </section>
+
+    <section class="card activity">
+      <div class="row">
+        <h2>Recent Claude activity</h2>
+        <span class="spacer"></span>
+        <button class="ghost" id="logClear">Clear</button>
+      </div>
+      <pre id="mcpLog" class="log">No calls yet</pre>
+    </section>
+  </main>
+
+  <div id="pinAsk" class="modal" hidden>
+    <div class="dialog">
+      <h2 id="pinTitle">PIN required</h2>
+      <input type="password" id="pinEntry" inputmode="numeric" maxlength="12" autocomplete="off" placeholder="PIN">
+      <div class="row" style="margin-top:14px">
+        <span class="spacer"></span>
+        <button id="pinCancel" class="ghost">Cancel</button>
+        <button id="pinSend" class="rec" style="padding:8px 18px;margin:0">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="incoming" class="modal" hidden>
+    <div class="dialog">
+      <h2 id="inTitle">Incoming files</h2>
+      <ul id="inFiles"></ul>
+      <div class="row">
+        <span class="spacer"></span>
+        <button id="inDecline" class="ghost">Decline</button>
+        <button id="inAccept" class="rec" style="padding:8px 18px;margin:0">Accept</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

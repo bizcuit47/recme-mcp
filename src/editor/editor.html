@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; media-src file:; img-src data:">
+  <title>Recme Editor</title>
+  <link rel="stylesheet" href="editor.css">
+</head>
+<body>
+  <header>
+    <h1>Edit</h1>
+    <span id="fileName"></span>
+    <span class="spacer"></span>
+    <span class="hint">Click the timeline to move the playhead · drag a blue piece to rearrange · S split · Del remove · [ ] trim · Ctrl+Z undo</span>
+  </header>
+
+  <div class="layout">
+    <section class="stage">
+      <div class="monitor"><video id="video" preload="auto"></video></div>
+
+      <div class="transport">
+        <button id="toStart" title="Go to start">⏮</button>
+        <button id="play" class="primary" title="Play / pause (Space)">▶</button>
+        <button id="toEnd" title="Go to end">⏭</button>
+        <input type="range" id="seek" min="0" max="1000" value="0" step="1" title="Drag to move through the clip">
+        <span id="time" class="mono">00:00.000 / 00:00.000</span>
+      </div>
+
+      <div class="tools">
+        <button id="split">Split <kbd>S</kbd></button>
+        <button id="trimIn">Trim start <kbd>[</kbd></button>
+        <button id="trimOut">Trim end <kbd>]</kbd></button>
+        <button id="remove" class="danger">Remove piece <kbd>Del</kbd></button>
+        <button id="moveL" title="Move the selected piece earlier (or drag it with the mouse)">◀ Move</button>
+        <button id="moveR" title="Move the selected piece later (or drag it with the mouse)">Move ▶</button>
+        <button id="undo">Undo</button>
+        <button id="reset">Reset</button>
+        <button id="viewMode" class="ghost" title="Gaps closed: pieces sit one after another like the exported video. Original positions: pieces stay where they are in the source clip.">View: gaps closed</button>
+        <span class="spacer"></span>
+        <span id="kept" class="mono muted"></span>
+      </div>
+
+      <div id="tracks" class="tracks">
+        <div id="timeline" class="timeline lane" title="Click or drag to move the playhead">
+          <span class="lane-label">Video</span>
+          <div id="segs"></div>
+          <div id="dropMark" hidden></div>
+        </div>
+        <div id="audioLane" class="lane audiolane" title="Audio track of this clip">
+          <span class="lane-label">Audio</span>
+          <canvas id="wave" hidden></canvas>
+          <div id="audioMask"></div>
+          <span id="noWave" class="nowave" hidden>No audio track</span>
+        </div>
+        <div id="playhead"><div class="knob"></div></div>
+      </div>
+      <div class="ruler" id="ruler"></div>
+
+      <div class="audiobar">
+        <strong>Audio</strong>
+        <select id="audioFormat" title="Format">
+          <option value="m4a">M4A (AAC)</option>
+          <option value="mp3">MP3</option>
+          <option value="wav">WAV (lossless)</option>
+          <option value="flac">FLAC (lossless)</option>
+        </select>
+        <button id="exportAudio">Save audio only</button>
+        <button id="detach" title="Saves the sound as its own file AND a copy of the video without sound">Detach audio from video</button>
+        <span class="hint" id="noAudio" hidden>This clip has no audio track.</span>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <h2>Export video</h2>
+      <label>Sound
+        <select id="audioMode">
+          <option value="keep">Keep sound</option>
+          <option value="remove">Remove sound (mute)</option>
+        </select>
+      </label>
+      <label>Method
+        <select id="mode">
+          <option value="precise">Precise (re-encode, frame accurate)</option>
+          <option value="fast">Fast (no re-encode, cuts at keyframes)</option>
+        </select>
+      </label>
+      <button id="exportVideo" class="primary wide">Export video</button>
+      <p class="hint">Only the pieces on the timeline are exported. Removed parts (striped) are cut out.</p>
+
+      <div id="progressBox" hidden>
+        <div class="bar"><div id="bar"></div></div>
+        <div id="progressText" class="muted"></div>
+      </div>
+      <div id="error" class="error" hidden></div>
+      <h2 id="resultsTitle" hidden>Saved files</h2>
+      <div id="results"></div>
+    </aside>
+  </div>
+
+  <script src="editor.js"></script>
+</body>
+</html>

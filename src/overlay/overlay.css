@@ -1,0 +1,24 @@
+html, body { margin: 0; height: 100%; overflow: hidden; background: rgba(0, 0, 0, 0.35); cursor: crosshair; user-select: none; font: 13px "Segoe UI", system-ui, sans-serif; }
+#hint {
+  position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+  background: #181b22ee; color: #e8eaf0; padding: 8px 16px; border-radius: 99px; border: 1px solid #ffffff22;
+  pointer-events: none; white-space: nowrap;
+}
+#sel {
+  position: fixed; border: 2px solid #ff4d5e; box-sizing: border-box; cursor: move;
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.45);
+  background: transparent;
+}
+#size {
+  position: absolute; top: -30px; left: -2px; background: #ff4d5e; color: #fff; padding: 2px 8px;
+  border-radius: 6px; font-weight: 600; white-space: nowrap; pointer-events: none;
+}
+.h { position: absolute; width: 12px; height: 12px; background: #fff; border: 2px solid #ff4d5e; border-radius: 3px; box-sizing: border-box; }
+.nw { left: -7px; top: -7px; cursor: nwse-resize; } .ne { right: -7px; top: -7px; cursor: nesw-resize; }
+.sw { left: -7px; bottom: -7px; cursor: nesw-resize; } .se { right: -7px; bottom: -7px; cursor: nwse-resize; }
+.n { left: calc(50% - 6px); top: -7px; cursor: ns-resize; } .s { left: calc(50% - 6px); bottom: -7px; cursor: ns-resize; }
+.w { top: calc(50% - 6px); left: -7px; cursor: ew-resize; } .e { top: calc(50% - 6px); right: -7px; cursor: ew-resize; }
+#bar { position: absolute; bottom: -44px; right: 0; display: flex; gap: 8px; }
+#sel.low #bar { bottom: 8px; right: 8px; }
+button { font: inherit; border: 0; border-radius: 8px; padding: 6px 14px; cursor: pointer; background: #232834; color: #fff; }
+#ok { background: #ff4d5e; font-weight: 600; }
