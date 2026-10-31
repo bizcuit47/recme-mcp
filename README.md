@@ -125,6 +125,10 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md) (please report privately).
 
 Windows only for now. A macOS port is in development and does **not** work yet; see [docs/MACOS.md](docs/MACOS.md) for the status and how to help test on a Mac. `gdigrab` reaches about 28–29 fps at 2880×1800. System sound is merged when you stop. The editor is basic (no text, transitions or multi-track). Not yet verified: transfers between two real devices and with the real LocalSend app, recording on multi-monitor setups, the installer itself.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests and guidelines.
+
 ## License
 
 MIT for Recme's own code (see [LICENSE](LICENSE)). Bundled FFmpeg and other components: see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
