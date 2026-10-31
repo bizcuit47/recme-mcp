@@ -62,7 +62,12 @@ src/
   recorder.js      ครอบ ffmpeg: เริ่ม/หยุดอัด, เลือก encoder, ต่อ+รวมเสียง, ภาพแคป
   system-audio.js  ตัวอัดเสียงระบบ (คุมหน้าต่างซ่อน)         └ audio/worker.*  ← หน้าเว็บที่อัดเสียงจริง
   mcp-server.js    MCP server (20 เครื่องมือ) + การตรวจสิทธิ์
-  windows.js       ดูรายชื่อหน้าต่างที่เปิดอยู่พร้อมตำแหน่ง (PowerShell + Win32 API)
+  windows.js       ทางเข้าเดียวสำหรับรายชื่อหน้าต่าง (ส่งต่อให้ platform)
+  platform/        โค้ดที่ขึ้นกับระบบปฏิบัติการอยู่ตรงนี้ที่เดียว (adapter ต่อ OS)
+    win32.js         ffmpeg gdigrab/dshow, DPI, ค้นหา ffmpeg, เริ่มพร้อม Windows  ← รองรับเต็มที่
+    win32-windows.js รายชื่อหน้าต่าง (PowerShell + Win32 API)
+    darwin.js        macOS: avfoundation, JXA  ← เขียนไว้แล้วแต่ยังไม่เคยรันบน Mac (docs/MACOS.md)
+    other.js         ระบบอื่น: ใช้ตัดต่อ/ส่งไฟล์ได้ แต่ยังอัดภาพไม่ได้
   editor.js        ตัดต่อ/แยกเสียง/กราฟเสียงด้วย ffmpeg
   lan-share.js     ส่ง-รับไฟล์ใน LAN (โปรโตคอล LocalSend v2), PIN, อุปกรณ์ที่ไว้ใจ
   identity.js      สร้าง/โหลดใบรับรอง TLS

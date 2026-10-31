@@ -102,7 +102,7 @@ npm run test:audio   # app running: records an area while a sound plays and chec
 
 ## Known limits
 
-Windows only. `gdigrab` reaches about 28–29 fps at 2880×1800. System sound is merged when you stop. The editor is basic (no text, transitions or multi-track). Not yet verified: transfers between two real devices and with the real LocalSend app, recording on multi-monitor setups, the installer itself.
+Windows only for now. A macOS port is in development and does **not** work yet; see [docs/MACOS.md](docs/MACOS.md) for the status and how to help test on a Mac. `gdigrab` reaches about 28–29 fps at 2880×1800. System sound is merged when you stop. The editor is basic (no text, transitions or multi-track). Not yet verified: transfers between two real devices and with the real LocalSend app, recording on multi-monitor setups, the installer itself.
 
 ## License
 

@@ -20,7 +20,8 @@ function buildReport(d) {
   const rows = [
     ['Recme', `${d.version} (${d.packaged ? 'installed app' : 'run from source'})`],
     ['Electron / Chromium / Node', `${d.electron} / ${d.chromium} / ${d.node}`],
-    ['Windows', `${d.osVersion} ${d.arch}`],
+    ['System', `${d.osVersion} ${d.arch}`],
+    ['Platform support', `${d.platform}${d.captureSupported ? '' : ' (no screen capture)'}${d.platform === 'darwin' ? ' (macOS support is experimental)' : ''}`],
     ['CPU / RAM', `${d.cpu} / ${d.ramGb} GB`],
     ['GPU', d.gpu.length ? d.gpu.map((g) => `${g.name}${g.driver ? ` (driver ${g.driver})` : ''}${g.active ? ' [active]' : ''}`).join('; ') : 'unknown'],
     ['Displays', d.displays.map((s, i) => `${i + 1}: ${s.width}x${s.height} @${Math.round(s.scale * 100)}%${s.primary ? ' (primary)' : ''}`).join('; ')],

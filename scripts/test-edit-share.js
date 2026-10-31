@@ -15,7 +15,7 @@ const assert = (cond, msg) => { console.log(`${cond ? 'PASS' : 'FAIL'}: ${msg}`)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function probe(ffmpeg, file) {
-  const bin = path.join(path.dirname(ffmpeg), 'ffprobe.exe');
+  const bin = require('../src/platform').ffprobeFor(ffmpeg);
   const r = spawnSync(bin, ['-v', 'error', '-show_entries', 'stream=codec_type,codec_name:format=duration', '-of', 'json', file], { encoding: 'utf8' });
   const j = JSON.parse(r.stdout);
   return { duration: parseFloat(j.format.duration), types: j.streams.map((s) => s.codec_type), codecs: j.streams.map((s) => s.codec_name) };

@@ -12,6 +12,7 @@ const { Editor } = require('./editor');
 const { LanShare } = require('./lan-share');
 const { loadOrCreateCert } = require('./identity');
 const { listWindows, findWindow } = require('./windows');
+const platform = require('./platform');
 const { buildReport } = require('./diagnostics');
 const { spawnSync } = require('child_process');
 const { pathToFileURL } = require('url');
@@ -78,19 +79,9 @@ function loadConfig() {
   return cfg;
 }
 
-/** Monitors in physical pixels (what ffmpeg gdigrab expects). */
+/** Monitors in physical pixels. How that is measured depends on the OS (see src/platform). */
 function getDisplays() {
-  const primary = screen.getPrimaryDisplay().id;
-  return screen.getAllDisplays().map((d, i) => {
-    const r = screen.dipToScreenRect(null, d.bounds);
-    return {
-      index: i,
-      label: `Display ${i + 1}${d.id === primary ? ' (primary)' : ''}`,
-      x: r.x, y: r.y,
-      width: Math.floor(d.bounds.width * d.scaleFactor), height: Math.floor(d.bounds.height * d.scaleFactor),
-      scale_factor: d.scaleFactor,
-    };
-  });
+  return platform.displays(screen);
 }
 
 async function resizeImage(file, maxWidth) {
@@ -124,7 +115,7 @@ function selectArea(initial) {
       const o = overlays.get(e.sender.id);
       if (!o) return;
       const dip = { x: o.display.bounds.x + r.x, y: o.display.bounds.y + r.y, width: r.w, height: r.h };
-      const phys = screen.dipToScreenRect(null, dip);
+      const phys = platform.toPhysicalRect(screen, dip);
       // dipToScreenRect rounds outwards; derive the size from the scale factor so 1 CSS px stays exact.
       finish({
         x: phys.x,
@@ -138,7 +129,7 @@ function selectArea(initial) {
     ipcMain.handle('overlay:initial', (e) => {
       const o = overlays.get(e.sender.id);
       if (!o || !initial) return null;
-      const dip = screen.screenToDipRect(null, initial);
+      const dip = platform.toDipRect(screen, initial);
       const rel = { x: dip.x - o.display.bounds.x, y: dip.y - o.display.bounds.y, w: dip.width, h: dip.height };
       const b = o.display.bounds;
       const inside = rel.x >= 0 && rel.y >= 0 && rel.x + rel.w <= b.width && rel.y + rel.h <= b.height;
@@ -187,7 +178,7 @@ function syncAreaFrame() {
   }
   if (areaFrame && !areaFrame.isDestroyed()) return;
   const pad = 4;
-  const dip = screen.screenToDipRect(null, { x: src.x, y: src.y, width: src.width, height: src.height });
+  const dip = platform.toDipRect(screen, { x: src.x, y: src.y, width: src.width, height: src.height });
   areaFrame = new BrowserWindow({
     x: dip.x - pad, y: dip.y - pad, width: dip.width + pad * 2, height: dip.height + pad * 2,
     frame: false, transparent: true, resizable: false, movable: false, focusable: false,
@@ -284,14 +275,11 @@ function createWindow(show = true) {
 }
 
 function loginItemOptions(openAtLogin) {
-  const args = [];
-  if (!app.isPackaged) args.push(app.getAppPath());
-  if (config.startHidden) args.push('--hidden');
-  return { openAtLogin, path: process.execPath, args };
+  return platform.loginItem(app, { openAtLogin, startHidden: config.startHidden, packaged: app.isPackaged });
 }
 
 function appSettings() {
-  const login = app.getLoginItemSettings({ path: process.execPath, args: loginItemOptions(true).args });
+  const login = app.getLoginItemSettings(loginItemOptions(true));
   return { closeToTray: config.closeToTray, startHidden: config.startHidden, autostart: !!login.openAtLogin, packaged: app.isPackaged };
 }
 
@@ -480,10 +468,10 @@ function registerIpc() {
     if (typeof closeToTray === 'boolean') config.closeToTray = closeToTray;
     if (typeof hidden === 'boolean') config.startHidden = hidden;
     saveConfig();
-    const current = app.getLoginItemSettings({ path: process.execPath, args: loginItemOptions(true).args }).openAtLogin;
+    const current = app.getLoginItemSettings(loginItemOptions(true)).openAtLogin;
     const want = typeof autostart === 'boolean' ? autostart : current;
     // Re-register so a changed "start hidden" option takes effect.
-    app.setLoginItemSettings({ openAtLogin: false, path: process.execPath, args: loginItemOptions(true).args });
+    app.setLoginItemSettings({ ...loginItemOptions(true), openAtLogin: false });
     app.setLoginItemSettings(loginItemOptions(want));
     return appSettings();
   });
@@ -562,6 +550,8 @@ async function collectDiagnostics() {
     electron: process.versions.electron,
     chromium: process.versions.chrome,
     node: process.versions.node,
+    platform: platform.id,
+    captureSupported: platform.supportsCapture,
     osVersion: typeof os.version === 'function' ? `${os.version()} (${os.release()})` : os.release(),
     arch: os.arch(),
     cpu: cpus.length ? `${cpus[0].model.trim()} x${cpus.length}` : 'unknown',
@@ -646,7 +636,7 @@ const areasApi = {
     return config.areas;
   },
 };
-const windowsApi = { list: () => listWindows() };
+const windowsApi = { list: () => listWindows({ screen }) };
 
 function notify(body) {
   try { if (Notification.isSupported()) new Notification({ title: 'Recme', body, silent: true }).show(); } catch { /* notifications unavailable */ }
@@ -710,7 +700,7 @@ app.whenReady().then(async () => {
     getDisplays,
     systemAudio,
     getAreas: () => config.areas,
-    findWindow,
+    findWindow: (title) => findWindow(title, { screen }),
   });
   recorder.detectEncoders();
   editor = new Editor(recorder);

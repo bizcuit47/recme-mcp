@@ -5,6 +5,7 @@ const EventEmitter = require('events');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const platform = require('./platform');
 
 // Quality presets. Default is "high": native resolution, no downscale, low CRF.
 const QUALITY = {
@@ -13,22 +14,12 @@ const QUALITY = {
   ultra: { crf: 14, fps: 60, label: 'Ultra (CRF 14, 60fps)' },
 };
 
-const HW_ENCODERS = ['h264_nvenc', 'h264_qsv', 'h264_amf'];
+const HW_ENCODERS = platform.hwEncoders; // which hardware encoders to try depends on the OS
 
 function findFfmpeg(configured) {
   // Installed app: ffmpeg ships in <install folder>/resources/ffmpeg. Otherwise fall back to the user's own copy.
-  const bundled = process.resourcesPath ? path.join(process.resourcesPath, 'ffmpeg', 'ffmpeg.exe') : null;
-  const candidates = [bundled, configured, process.env.FFMPEG_PATH, 'ffmpeg'].filter(Boolean);
-  const winget = path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WinGet', 'Packages');
-  try {
-    for (const pkg of fs.readdirSync(winget)) {
-      if (!/ffmpeg/i.test(pkg)) continue;
-      const root = path.join(winget, pkg);
-      for (const sub of fs.readdirSync(root)) {
-        candidates.push(path.join(root, sub, 'bin', 'ffmpeg.exe'));
-      }
-    }
-  } catch { /* winget folder not present */ }
+  const bundled = process.resourcesPath ? path.join(process.resourcesPath, 'ffmpeg', platform.ffmpegNames.ffmpeg) : null;
+  const candidates = [bundled, configured, process.env.FFMPEG_PATH, 'ffmpeg', ...platform.ffmpegCandidates()].filter(Boolean);
   for (const c of candidates) {
     const r = spawnSync(c, ['-version'], { windowsHide: true });
     if (r.status === 0) return c;
@@ -42,6 +33,8 @@ function encoderArgs(encoder, crf) {
       return ['-c:v', 'h264_nvenc', '-preset', 'p5', '-rc', 'vbr', '-cq', String(crf), '-b:v', '0', '-profile:v', 'high'];
     case 'h264_qsv':
       return ['-c:v', 'h264_qsv', '-global_quality', String(crf), '-preset', 'medium'];
+    case 'h264_videotoolbox': // macOS. UNVERIFIED quality mapping (q:v is 1-100, higher = better)
+      return ['-c:v', 'h264_videotoolbox', '-q:v', String(Math.max(1, Math.min(100, Math.round(100 - crf * 1.8)))), '-profile:v', 'high'];
     case 'h264_amf':
       return ['-c:v', 'h264_amf', '-quality', 'quality', '-rc', 'cqp', '-qp_i', String(crf), '-qp_p', String(crf), '-qp_b', String(crf)];
     default:
@@ -77,7 +70,7 @@ class Recorder extends EventEmitter {
 
   requireFfmpeg() {
     if (!this.ffmpeg) {
-      throw new Error('ffmpeg not found. Install it (winget install Gyan.FFmpeg) or set FFMPEG_PATH.');
+      throw new Error(`ffmpeg not found. Install it (${platform.id === 'darwin' ? 'brew install ffmpeg' : 'winget install Gyan.FFmpeg'}) or set FFMPEG_PATH.`);
     }
     return this.ffmpeg;
   }
@@ -101,19 +94,10 @@ class Recorder extends EventEmitter {
     return this.hwEncoders[0] || 'libx264';
   }
 
-  /** DirectShow audio capture devices. */
+  /** Audio input devices ffmpeg can record (DirectShow on Windows, AVFoundation on macOS). */
   listAudioDevices() {
     if (!this.ffmpeg) return [];
-    const r = spawnSync(this.ffmpeg, ['-hide_banner', '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'], {
-      windowsHide: true,
-      encoding: 'utf8',
-    });
-    const devices = [];
-    for (const line of (r.stderr || '').split(/\r?\n/)) {
-      const m = line.match(/"(.+)" \(audio\)/);
-      if (m) devices.push(m[1]);
-    }
-    return devices;
+    return platform.listAudioDevices(this.ffmpeg);
   }
 
   /** Bounding box of all monitors in physical pixels. */
@@ -164,24 +148,10 @@ class Recorder extends EventEmitter {
     return source;
   }
 
-  /** gdigrab input args for a capture source. Coordinates are physical pixels. */
-  sourceArgs(source = { type: 'desktop' }) {
-    source = this.resolveSource(source);
-    switch (source.type) {
-      case 'display': {
-        const d = this.getDisplays().find((x) => x.index === source.index);
-        if (!d) throw new Error(`Display ${source.index} not found`);
-        return ['-offset_x', String(d.x), '-offset_y', String(d.y), '-video_size', `${d.width}x${d.height}`, '-i', 'desktop'];
-      }
-      case 'region': {
-        const r = this.clampRegion(source);
-        return ['-offset_x', String(r.x), '-offset_y', String(r.y), '-video_size', `${r.width}x${r.height}`, '-i', 'desktop'];
-      }
-      case 'window':
-        return ['-i', `title=${source.title}`];
-      default:
-        return ['-i', 'desktop'];
-    }
+  /** A friendly source resolved to a plain one (desktop / display / region / window); regions are fitted to the screen. */
+  captureSource(source = { type: 'desktop' }) {
+    const s = this.resolveSource(source);
+    return s.type === 'region' ? { type: 'region', ...this.clampRegion(s) } : s;
   }
 
   newFilePath(prefix, ext) {
@@ -197,19 +167,16 @@ class Recorder extends EventEmitter {
     const fps = Math.min(Math.max(Math.round(options.fps || preset.fps), 5), 120);
     const crf = options.crf ?? preset.crf;
     const encoder = this.pickEncoder(options.encoder);
-    let source = this.resolveSource(options.source || { type: 'desktop' });
-    if (source.type === 'region') source = { type: 'region', ...this.clampRegion(source) };
+    const source = this.captureSource(options.source);
     const audio = options.audio_device || null;
     const file = options.file || this.newFilePath('rec', 'mp4');
 
     const args = ['-hide_banner', '-y'];
-    args.push('-f', 'gdigrab', '-framerate', String(fps), '-draw_mouse', options.cursor === false ? '0' : '1', '-thread_queue_size', '1024');
-    args.push(...this.sourceArgs(source));
-    if (audio) {
-      args.push('-f', 'dshow', '-rtbufsize', '256M', '-thread_queue_size', '1024', '-i', `audio=${audio}`);
-    }
+    const vin = platform.videoInput({ ffmpeg, source, fps, cursor: options.cursor !== false, displays: this.getDisplays() });
+    args.push(...vin.args);
+    if (audio) args.push(...platform.micInput(ffmpeg, audio));
     // No resizing: crop (never scale) to even dimensions (required by yuv420p), tag BT.709 so colours stay accurate.
-    args.push('-vf', 'crop=trunc(iw/2)*2:trunc(ih/2)*2,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p');
+    args.push('-vf', [...vin.filters, 'crop=trunc(iw/2)*2:trunc(ih/2)*2', 'scale=out_color_matrix=bt709:out_range=tv', 'format=yuv420p'].join(','));
     args.push(...encoderArgs(encoder, crf));
     args.push('-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-r', String(fps));
     if (audio) args.push('-c:a', 'aac', '-b:a', '192k');
@@ -218,7 +185,7 @@ class Recorder extends EventEmitter {
 
     // System audio (what you hear from the speakers) is captured by the app's loopback worker,
     // because ffmpeg/gdigrab cannot capture it. It is muxed into the video when recording stops.
-    this.warning = null;
+    this.warning = vin.note || null;
     // Setting up the sound capture can take a few seconds the first time: block a second start meanwhile.
     this.state = 'starting';
     this.emit('change');
@@ -257,9 +224,9 @@ class Recorder extends EventEmitter {
     this.proc = proc;
     proc.stderr.on('data', (b) => {
       stderr = (stderr + b.toString()).slice(-4000);
-      if (!current.videoStartMs) {
+      if (!current.videoStartMs && platform.captureStartRegex) {
         // gdigrab reports its start time as epoch seconds; used to line the audio up with the first frame.
-        const m = stderr.match(/Input #0, gdigrab[\s\S]*?start: (\d+\.\d+)/);
+        const m = stderr.match(platform.captureStartRegex);
         if (m) current.videoStartMs = parseFloat(m[1]) * 1000;
       }
     });
@@ -400,7 +367,8 @@ class Recorder extends EventEmitter {
   screenshot(options = {}) {
     const ffmpeg = this.requireFfmpeg();
     const file = this.newFilePath('shot', 'png');
-    const args = ['-hide_banner', '-y', '-f', 'gdigrab', '-framerate', '1', '-draw_mouse', options.cursor ? '1' : '0', ...this.sourceArgs(options.source), '-frames:v', '1', file];
+    const vin = platform.videoInput({ ffmpeg, source: this.captureSource(options.source), fps: 1, cursor: !!options.cursor, displays: this.getDisplays() });
+    const args = ['-hide_banner', '-y', ...vin.args, ...(vin.filters.length ? ['-vf', vin.filters.join(',')] : []), '-frames:v', '1', file];
     const r = spawnSync(ffmpeg, args, { windowsHide: true, encoding: 'utf8', timeout: 15000 });
     if (r.status !== 0 || !fs.existsSync(file)) throw new Error(`Screenshot failed: ${(r.stderr || '').split(/\r?\n/).filter(Boolean).slice(-2).join(' | ')}`);
     return file;
@@ -415,8 +383,7 @@ class Recorder extends EventEmitter {
   }
 
   probe(file) {
-    const ffprobe = path.join(path.dirname(this.requireFfmpeg()), 'ffprobe.exe');
-    const bin = fs.existsSync(ffprobe) ? ffprobe : 'ffprobe';
+    const bin = platform.ffprobeFor(this.requireFfmpeg());
     const r = spawnSync(bin, ['-v', 'error', '-show_entries', 'stream=codec_name,width,height,r_frame_rate,bit_rate:format=duration,size,bit_rate', '-of', 'json', file], { windowsHide: true, encoding: 'utf8' });
     if (r.status !== 0) return null;
     try { return JSON.parse(r.stdout); } catch { return null; }

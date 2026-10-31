@@ -5,6 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { encoderArgs } = require('./recorder');
+const platform = require('./platform');
 
 const AUDIO_FORMATS = {
   m4a: ['-c:a', 'aac', '-b:a', '256k'],
@@ -23,8 +24,7 @@ class Editor {
 
   info(name) {
     const file = this.recorder.resolveRecording(name);
-    const bin = path.join(path.dirname(this.ffmpeg), 'ffprobe.exe');
-    const r = spawnSync(fs.existsSync(bin) ? bin : 'ffprobe',
+    const r = spawnSync(platform.ffprobeFor(this.ffmpeg),
       ['-v', 'error', '-show_entries', 'stream=codec_type,width,height,r_frame_rate:format=duration', '-of', 'json', file],
       { windowsHide: true, encoding: 'utf8' });
     if (r.status !== 0) throw new Error('Cannot read this file');

@@ -5,6 +5,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 const call = (name) => (...args) => ipcRenderer.invoke(name, ...args);
 
 contextBridge.exposeInMainWorld('recme', {
+  platform: process.platform,
   init: call('init'),
   start: call('start'),
   stop: call('stop'),

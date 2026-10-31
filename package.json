@@ -21,7 +21,8 @@
     "dist": "npm run icon && npm run prepare:ffmpeg && electron-builder --win nsis --x64",
     "test:mcp": "node scripts/test-mcp.js",
     "test:audio": "node scripts/test-audio.js",
-    "test:edit": "node scripts/test-edit-share.js"
+    "test:edit": "node scripts/test-edit-share.js",
+    "dist:mac": "npm run icon && electron-builder --mac dmg zip"
   },
   "license": "MIT",
   "dependencies": {
@@ -52,6 +53,8 @@
         "filter": [
           "ffmpeg.exe",
           "ffprobe.exe",
+          "ffmpeg",
+          "ffprobe",
           "LICENSE"
         ]
       },
@@ -83,6 +86,26 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Recme",
       "artifactName": "Recme-Setup-${version}.exe"
+    },
+    "mac": {
+      "category": "public.app-category.video",
+      "icon": "build/icon.png",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Recme records your microphone when you turn the microphone option on.",
+        "NSAudioCaptureUsageDescription": "Recme records system audio when you turn the system audio option on.",
+        "NSCameraUsageDescription": "Recme does not use the camera."
+      }
+    },
+    "dmg": {
+      "artifactName": "Recme-${version}-${arch}.dmg"
     }
   }
 }

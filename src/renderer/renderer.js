@@ -744,14 +744,17 @@ function acceleratorFrom(e) {
   else if (KEY_NAMES[e.code]) key = KEY_NAMES[e.code];
   if (!key) return null; // a lone modifier or an unsupported key
   const parts = [];
-  if (e.ctrlKey) parts.push('CommandOrControl');
+  const mac = window.recme.platform === 'darwin';
+  if (e.ctrlKey) parts.push(mac ? 'Control' : 'CommandOrControl');
   if (e.altKey) parts.push('Alt');
   if (e.shiftKey) parts.push('Shift');
-  if (e.metaKey) parts.push('Super');
+  if (e.metaKey) parts.push(mac ? 'Command' : 'Super');
   if (!parts.length) return null;
   return [...parts, key].join('+');
 }
-const prettyKeys = (a) => a.replace('CommandOrControl', 'Ctrl').replace(/\+/g, ' + ');
+const prettyKeys = (a) => (window.recme.platform === 'darwin'
+  ? a.replace('CommandOrControl', 'Cmd').replace(/\+/g, ' + ')
+  : a.replace('CommandOrControl', 'Ctrl').replace(/\+/g, ' + '));
 function renderHotkey(h) {
   $('hkOn').checked = h.enabled;
   $('hkKeys').value = prettyKeys(h.accelerator);
