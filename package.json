@@ -13,6 +13,9 @@
     "url": "https://github.com/bizcuit47/recme-mcp/issues"
   },
   "main": "src/main.js",
+  "bin": {
+    "recme": "src/cli.js"
+  },
   "private": true,
   "scripts": {
     "start": "electron .",
@@ -22,7 +25,8 @@
     "test:mcp": "node scripts/test-mcp.js",
     "test:audio": "node scripts/test-audio.js",
     "test:edit": "node scripts/test-edit-share.js",
-    "dist:mac": "npm run icon && electron-builder --mac dmg zip"
+    "dist:mac": "npm run icon && electron-builder --mac dmg zip",
+    "test:cli": "node scripts/test-cli.js"
   },
   "license": "MIT",
   "dependencies": {

@@ -21,6 +21,7 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - run: npm run test:edit
+      - run: npm run test:cli
 
   macos:
     name: macOS - headless tests (experimental)
@@ -39,6 +40,7 @@ jobs:
       # The editor, export and Wi-Fi sharing code is platform independent; this is the first
       # real check of it on a Mac. Screen capture itself still needs a person with a Mac.
       - run: npm run test:edit
+      - run: npm run test:cli
 
   macos-build:
     name: macOS - unsigned build (experimental)

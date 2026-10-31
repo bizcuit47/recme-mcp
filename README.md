@@ -72,6 +72,24 @@ Sources for `start_recording` / `take_screenshot`: `desktop`, `display`, `region
 
 Videos cannot be returned to a chat as video: Claude gets frames and overviews as pictures and the file path as text. In the Claude Code desktop app it can also hand you the file.
 
+## Command line: `recme`
+
+Everything Claude can do, you can script. `recme` talks to the running app through the same local MCP server (same token, same confirmations).
+
+```bash
+recme start --area game --max-seconds 30     # or --display 0, --region x,y,w,h, --window-area Unity
+recme stop
+recme list
+recme trim rec_2026-01-01.mp4 --keep 0-5,12-30 --mute
+recme compress rec_2026-01-01.mp4 --mb 25
+recme send rec_2026-01-01.mp4 "My Phone"
+recme help                                   # all commands; `recme call <tool> '{json}'` reaches any MCP tool
+```
+
+- **Installed with the setup program:** run `powershell -ExecutionPolicy Bypass -File scripts\install-cli.ps1` (from a clone) once, then open a new terminal. It adds `recme` to your *user* PATH (no admin rights) and uses Recme's own runtime, so Node.js is not needed. `-Uninstall` removes it. Limitation: in that mode the exit code is not reliable.
+- **From a clone:** `npm install && npm link` gives a `recme` command backed by Node.js, with proper exit codes (0 ok, 1 tool error, 2 bad command, 3 app not reachable).
+- It reads the token and port from Recme's `config.json`; override with `RECME_URL` / `RECME_TOKEN`. The app has to be running.
+
 ## Sharing on Wi-Fi
 
 Send any file to another PC or phone on the same network (Recme or [LocalSend](https://localsend.org/)). Drag files in or pick them from the library; the other side must accept every transfer. Receiving is encrypted (HTTPS), supports a PIN and "trusted devices", and saves into a folder you choose. Multicast discovery works on most home networks; press **Find devices** to scan the subnet when it does not.
@@ -90,11 +108,14 @@ The bundled ffmpeg is a **GPL** build. That is fine for your own use; if you han
 
 ```bash
 npm run test:edit    # no app needed: cutting, reordering, size limit, audio, file transfer, HTTPS, PIN, trust
+npm run test:cli     # no app needed: the recme command's argument handling and error messages
 npm run test:mcp     # app running: the MCP tools and token check
 npm run test:audio   # app running: records an area while a sound plays and checks it is in the file
 ```
 
 ## Security
+
+Found a vulnerability? See [SECURITY.md](SECURITY.md) (please report privately).
 
 - The MCP server binds to `127.0.0.1`, needs the bearer token, and rejects requests with an `Origin` header or a foreign `Host`, so web pages cannot drive it. **Reset token** in the Claude tab replaces it.
 - Tools that send or delete files can ask for your confirmation first (on by default); capture tools can too.
