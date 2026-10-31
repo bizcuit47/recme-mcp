@@ -8,7 +8,7 @@ Recme is a **beta**. It was developed and tested on one Windows 11 PC, so report
 ## Before you start
 
 - Windows 10 or 11, 64-bit. (There is no macOS or Linux version.)
-- Download **`Recme-Setup-<version>.exe`** from the [latest release](https://github.com/bizcuit47/recme-mcp/releases/latest) and run it.
+- Download **`Recme-Setup-<version>.exe`** from the [newest release](https://github.com/bizcuit47/recme-mcp/releases) (top of the list, under *Assets*) and run it.
 - Windows **SmartScreen** may say it does not know the publisher (the installer is not code-signed yet). Choose **More info → Run anyway**.
 - Windows **Firewall** may ask about network access. Allow **Private networks** (needed only for sending files over Wi-Fi).
 - You do not need to install ffmpeg or Node.js to use the app itself.
@@ -68,7 +68,7 @@ Windows only · about 28–29 fps when recording a 2880×1800 screen · system s
 
 Recme ยังเป็นรุ่นทดลอง (beta) ผมทดสอบบนเครื่องเดียว การทดสอบบน**เครื่องอื่น**จึงมีค่ามากที่สุด
 
-1. โหลด `Recme-Setup-<เวอร์ชัน>.exe` จาก [หน้า Releases](https://github.com/bizcuit47/recme-mcp/releases/latest) แล้วรัน (Windows 10/11 แบบ 64-bit เท่านั้น)
+1. โหลด `Recme-Setup-<เวอร์ชัน>.exe` จาก [หน้า Releases](https://github.com/bizcuit47/recme-mcp/releases) (รุ่นบนสุด ในหัวข้อ Assets) แล้วรัน (Windows 10/11 แบบ 64-bit เท่านั้น)
 2. ถ้า Windows เตือน SmartScreen ให้กด **More info → Run anyway** ถ้า Firewall ถามให้อนุญาตเฉพาะเครือข่าย **Private**
 3. ลองตามหัวข้อ "5-minute smoke test": อัด 10 วินาที, เปิดดู, ตัดต่อ, แยกเสียง, ปิดหน้าต่างแล้วกด `Ctrl+Shift+R`
 4. ถ้าสะดวก ลองหัวข้อ "Things I could not test myself" โดยเฉพาะ: ส่งไฟล์ระหว่างสองเครื่อง (หรือกับ LocalSend บนมือถือ), หลายจอ, สเกลจอต่างกัน, การ์ดจอต่างยี่ห้อ, อัดนาน 30 นาที
