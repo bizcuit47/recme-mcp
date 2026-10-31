@@ -20,6 +20,10 @@ Get **`Recme-Setup-<version>.exe`** from the latest release, run it, done (ffmpe
 - **Share on Wi-Fi.** LocalSend-style transfers with HTTPS, optional PIN and trusted devices.
 - **Stays out of the way.** Lives in the system tray, global hotkey (default `Ctrl+Shift+R`), optional start with Windows.
 
+## Help test
+
+Recme is a beta and has only been tried on one PC. If you have a few minutes, see **[docs/TESTING.md](docs/TESTING.md)** (with a Thai summary) and open a [Test report or Bug report](https://github.com/bizcuit47/recme-mcp/issues/new/choose). In the app, **Record → App → Copy diagnostics** collects the details we need (no token, PIN, file or device names).
+
 ## Install
 
 **From an installer:** run `Recme-Setup-<version>.exe` (it already contains ffmpeg). It is not code-signed, so Windows SmartScreen may warn: *More info → Run anyway*.

@@ -1,0 +1,74 @@
+name: Bug report
+description: Something in Recme does not work as expected
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping to test Recme! The more of the fields below you fill in, the faster it can be fixed.
+        **Tip:** in Recme open **Record → App → Copy diagnostics**, then paste the result into the last box. It contains no token, PIN, file names or device names.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+      placeholder: "I pressed Start recording with 'Custom area', ... and the video was black."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Recme
+        2. ...
+        3. ...
+    validations:
+      required: false
+  - type: dropdown
+    id: where
+    attributes:
+      label: Which part?
+      options:
+        - Installing / starting the app
+        - Recording (picture)
+        - Recording (sound)
+        - Area / window selection
+        - Editor (cut, rearrange, audio)
+        - Share on Wi-Fi
+        - Claude connection (MCP)
+        - Hotkey / tray
+        - Something else
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Recme version
+      description: Shown in the installer file name, e.g. 1.0.1
+      placeholder: "1.0.1"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 23H2"
+    validations:
+      required: false
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Paste the output of **Copy diagnostics** here.
+      render: markdown
+    validations:
+      required: false
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or anything else
+      description: You can drag images or small screen recordings in here.
+    validations:
+      required: false

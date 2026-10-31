@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('recme', {
   hotkey: { get: call('hotkey:get'), set: call('hotkey:set') },
   ask: { get: call('ask:get'), set: call('ask:set') },
   resetToken: call('mcp:resetToken'),
+  diagnostics: { get: call('diagnostics:get'), showLog: call('log:show') },
   pathForFile: (file) => webUtils.getPathForFile(file),
   share: {
     chooseReceiveDir: call('share:chooseReceiveDir'),

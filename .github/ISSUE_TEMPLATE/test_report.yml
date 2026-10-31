@@ -1,0 +1,60 @@
+name: Test report ("I tried it")
+description: Tell us what worked (and what did not) on your PC, even if everything was fine
+title: "[Test] "
+labels: ["test report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for testing Recme! Please tick what you tried and say how it went. "Everything worked" is a very useful report too.
+        The full list is in [docs/TESTING.md](https://github.com/bizcuit47/recme-mcp/blob/main/docs/TESTING.md).
+  - type: dropdown
+    id: result
+    attributes:
+      label: Overall
+      options:
+        - Everything I tried worked
+        - Mostly worked, a few problems
+        - Many things did not work
+        - Could not install or start it
+    validations:
+      required: true
+  - type: checkboxes
+    id: tried
+    attributes:
+      label: What I tried
+      options:
+        - label: Installed with the installer (and SmartScreen / Firewall prompts were understandable)
+        - label: Recorded the whole screen with sound
+        - label: Recorded a dragged area, and a saved area
+        - label: Recorded on a second monitor / with a different display scale
+        - label: Used the global hotkey and the tray menu
+        - label: Cut, rearranged and exported a clip in the editor (also "Fit under" a size)
+        - label: Detached or saved the audio only
+        - label: Sent a file to another device on Wi-Fi (Recme or LocalSend)
+        - label: Received a file from another device
+        - label: Connected Claude Code or Claude Desktop and asked it to record
+        - label: Long recording (30 minutes or more)
+        - label: Uninstalled it
+  - type: textarea
+    id: notes
+    attributes:
+      label: Details
+      description: What worked, what did not, anything that felt confusing.
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: Recme version
+      placeholder: "1.0.1"
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Paste the output of **Record → App → Copy diagnostics** (no private data in it).
+      render: markdown
+    validations:
+      required: false

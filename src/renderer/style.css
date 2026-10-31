@@ -75,6 +75,7 @@ input[type="text"] {
   border-radius: 8px; padding: 6px 8px; width: 100%;
 }
 .appset, .recv, .askcard { grid-column: 1 / -1; }
+.diag { margin-top: 12px; flex-wrap: wrap; }
 .sizes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 #sizeChips { display: contents; }
 .sizechip { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: 99px; overflow: hidden; }

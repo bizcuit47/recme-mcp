@@ -603,6 +603,16 @@ for (const [id, key] of [['closeTray', 'closeToTray'], ['autostart', 'autostart'
   $(id).onchange = async () => { const r = await window.recme.app.set({ [key]: $(id).checked }); if (r.ok) renderApp(r.data); };
 }
 loadApp();
+$('diagCopy').onclick = async () => {
+  $('diagCopy').disabled = true;
+  const r = await window.recme.diagnostics.get();
+  $('diagCopy').disabled = false;
+  if (!r.ok) { showError(r.error); return; }
+  await window.recme.copy(r.data);
+  $('diagCopy').textContent = 'Copied! Paste it into your bug report';
+  setTimeout(() => { $('diagCopy').textContent = 'Copy diagnostics'; }, 3000);
+};
+$('logShow').onclick = () => window.recme.diagnostics.showLog();
 
 $('scanBtn').onclick = async () => {
   $('scanBtn').disabled = true; $('scanBtn').textContent = 'Searching…';

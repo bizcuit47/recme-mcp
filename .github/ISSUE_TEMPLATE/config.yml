@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Testing guide
+    url: https://github.com/bizcuit47/recme-mcp/blob/main/docs/TESTING.md
+    about: What to try, step by step, before you open an issue

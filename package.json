@@ -1,7 +1,7 @@
 {
   "name": "recme",
   "productName": "Recme",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Recme - screen recorder with a built-in MCP server so Claude can control it",
   "author": "Recme",
   "homepage": "https://github.com/bizcuit47/recme-mcp#readme",

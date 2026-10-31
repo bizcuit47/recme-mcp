@@ -12,6 +12,8 @@ const { Editor } = require('./editor');
 const { LanShare } = require('./lan-share');
 const { loadOrCreateCert } = require('./identity');
 const { listWindows, findWindow } = require('./windows');
+const { buildReport } = require('./diagnostics');
+const { spawnSync } = require('child_process');
 const { pathToFileURL } = require('url');
 
 app.setName('Recme');
@@ -32,6 +34,22 @@ let isQuitting = false;
 let hintedTray = false;
 const startHidden = process.argv.includes('--hidden');
 const mcpLog = [];
+
+// ---- small log file (userData/recme.log, capped) used by the diagnostics report ----
+let logFile = null;
+function log(...parts) {
+  try {
+    if (!logFile) logFile = path.join(app.getPath('userData'), 'recme.log');
+    const text = parts.map((p) => (p instanceof Error ? p.stack || p.message : typeof p === 'string' ? p : JSON.stringify(p))).join(' ');
+    fs.appendFileSync(logFile, `${new Date().toISOString()} ${text}\n`);
+    if (fs.statSync(logFile).size > 512 * 1024) {
+      const keep = fs.readFileSync(logFile, 'utf8').slice(-256 * 1024);
+      fs.writeFileSync(logFile, keep.slice(keep.indexOf('\n') + 1));
+    }
+  } catch { /* logging must never break the app */ }
+}
+process.on('uncaughtException', (e) => log('uncaughtException', e));
+process.on('unhandledRejection', (e) => log('unhandledRejection', e));
 
 function loadConfig() {
   const file = path.join(app.getPath('userData'), 'config.json');
@@ -452,6 +470,10 @@ function registerIpc() {
     return shareInfo();
   });
 
+  // ---- diagnostics for bug reports ----
+  handle('diagnostics:get', () => collectDiagnostics());
+  handle('log:show', () => { log('log opened'); if (logFile) shell.showItemInFolder(logFile); });
+
   // ---- app behaviour (tray, start with Windows) ----
   handle('app:get', () => appSettings());
   handle('app:set', ({ closeToTray, startHidden: hidden, autostart }) => {
@@ -508,6 +530,60 @@ function registerPaths(paths) {
     } catch { /* unreadable, skip */ }
   }
   return out;
+}
+
+/** Facts about this installation for a bug report. Nothing private goes in (see diagnostics.js). */
+async function collectDiagnostics() {
+  let gpu = [];
+  try {
+    const info = await Promise.race([app.getGPUInfo('complete'), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 4000))]);
+    const VENDORS = { 4318: 'NVIDIA', 32902: 'Intel', 4098: 'AMD', 5140: 'Microsoft (basic display driver)', 20803: 'Qualcomm' };
+    const hex = (n) => `0x${Number(n).toString(16).padStart(4, '0')}`;
+    gpu = (info.gpuDevice || []).map((g) => ({
+      name: g.deviceString || `${VENDORS[g.vendorId] || `vendor ${hex(g.vendorId)}`} GPU (id ${hex(g.vendorId)}:${hex(g.deviceId)})`,
+      driver: g.driverVersion || '',
+      active: !!g.active,
+    }));
+  } catch { /* GPU details are optional */ }
+  let ffmpegVersion = '';
+  if (recorder.ffmpeg) {
+    const r = spawnSync(recorder.ffmpeg, ['-version'], { encoding: 'utf8', windowsHide: true, timeout: 5000 });
+    ffmpegVersion = ((r.stdout || '').split(/\r?\n/)[0] || '').replace(/ Copyright.*/, '');
+  }
+  let logTail = [];
+  try { logTail = fs.readFileSync(logFile || path.join(app.getPath('userData'), 'recme.log'), 'utf8').trim().split(/\r?\n/).slice(-40); } catch { /* no log yet */ }
+  const st = recorder.status();
+  const ls = config.lastStart;
+  const cpus = os.cpus();
+  return buildReport({
+    home: os.homedir(),
+    version: app.getVersion(),
+    packaged: app.isPackaged,
+    electron: process.versions.electron,
+    chromium: process.versions.chrome,
+    node: process.versions.node,
+    osVersion: typeof os.version === 'function' ? `${os.version()} (${os.release()})` : os.release(),
+    arch: os.arch(),
+    cpu: cpus.length ? `${cpus[0].model.trim()} x${cpus.length}` : 'unknown',
+    ramGb: Math.round(os.totalmem() / 1073741824),
+    gpu,
+    displays: screen.getAllDisplays().map((d) => ({ width: Math.floor(d.bounds.width * d.scaleFactor), height: Math.floor(d.bounds.height * d.scaleFactor), scale: d.scaleFactor, primary: d.id === screen.getPrimaryDisplay().id })),
+    ffmpegVersion,
+    ffmpegBundled: !!recorder.ffmpeg && /resources[\\/]ffmpeg[\\/]/i.test(recorder.ffmpeg),
+    hwEncoders: recorder.hwEncoders,
+    audioInputs: recorder.listAudioDevices().length,
+    mcpRunning: !!mcpServer,
+    mcpPort: config.port,
+    share: { port: share.port, https: share.https, receive: share.receive, hasPin: !!share.pin, trusted: share.trusted.length, error: share.lastError },
+    hotkey: hotkeyInfo(),
+    tray: !!tray,
+    settings: { closeToTray: config.closeToTray, autostart: appSettings().autostart, ask: config.ask },
+    lastStart: ls && { quality: ls.quality, fps: ls.fps, encoder: ls.encoder, system_audio: ls.system_audio, cursor: ls.cursor, source: ls.source && ls.source.type },
+    areasCount: config.areas.length,
+    sizesCount: config.sizePresets.length,
+    recorder: { state: st.state, lastError: st.last_error, warning: st.warning },
+    logTail,
+  });
 }
 
 function saveConfig() {
@@ -658,8 +734,13 @@ app.whenReady().then(async () => {
   share.on('incoming-done', toWin('share:incoming-done'));
   share.on('progress', toWin('share:progress'));
   share.on('received', toWin('share:received'));
-  share.start().catch((e) => { share.lastError = `Network sharing unavailable: ${e.message}`; });
+  share.start().catch((e) => { share.lastError = `Network sharing unavailable: ${e.message}`; log(share.lastError); });
   recorder.on('change', () => { pushState(); syncAreaFrame(); updateTray(); });
+  recorder.on('finished', (info) => {
+    const o = info.options || {};
+    log('recording finished', { options: { fps: o.fps, crf: o.crf, encoder: o.encoder, source: o.source && o.source.type, system_audio: o.system_audio }, error: recorder.lastError, warning: recorder.warning, ffmpegExit: recorder.lastExit && { code: recorder.lastExit.code, signal: recorder.lastExit.signal, tail: recorder.lastExit.code ? recorder.lastExit.tail : undefined } });
+  });
+  log(`Recme ${app.getVersion()} started`, { packaged: app.isPackaged, ffmpeg: path.basename(path.dirname(recorder.ffmpeg || '')) || 'missing', hwEncoders: recorder.hwEncoders });
   setInterval(() => { if (recorder.state === 'recording') { pushState(); updateTray(); } }, 1000);
 
   try {
@@ -681,6 +762,7 @@ app.whenReady().then(async () => {
     });
   } catch (e) {
     mcpLog.push(`MCP server failed to start: ${e.message}`);
+    log('MCP server failed to start:', e.message);
   }
 
   registerIpc();
