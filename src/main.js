@@ -92,55 +92,118 @@ async function resizeImage(file, maxWidth) {
 
 /**
  * Full-screen selection overlay on every monitor. Resolves to a rect in physical pixels
- * ({x,y,width,height}) or null when cancelled.
+ * ({x,y,width,height}) or null when cancelled. The box can be dragged onto any display.
  */
 function selectArea(initial) {
   return new Promise((resolve) => {
     const displays = screen.getAllDisplays();
     const overlays = new Map(); // webContents id -> { win, display }
     let finished = false;
+    let cursorTimer = null;
+
+    const dipDisplays = displays.map((d) => ({
+      id: d.id,
+      x: d.bounds.x,
+      y: d.bounds.y,
+      width: d.bounds.width,
+      height: d.bounds.height,
+      scaleFactor: d.scaleFactor,
+    }));
+
+    const stopCursor = () => {
+      if (!cursorTimer) return;
+      clearInterval(cursorTimer);
+      cursorTimer = null;
+    };
+
+    const displayAt = (x, y) => {
+      const px = Math.round(x);
+      const py = Math.round(y);
+      return displays.find((d) => px >= d.bounds.x && py >= d.bounds.y && px < d.bounds.x + d.bounds.width && py < d.bounds.y + d.bounds.height)
+        || screen.getDisplayNearestPoint({ x: px, y: py });
+    };
 
     const finish = (result) => {
       if (finished) return;
       finished = true;
+      stopCursor();
       ipcMain.removeHandler('overlay:initial');
       ipcMain.removeListener('overlay:done', onDone);
       ipcMain.removeListener('overlay:cancel', onCancel);
+      ipcMain.removeListener('overlay:sync', onSync);
+      ipcMain.removeListener('overlay:watch', onWatch);
+      ipcMain.removeListener('overlay:drop', onDrop);
       for (const { win: w } of overlays.values()) if (!w.isDestroyed()) w.destroy();
       if (win && !win.isDestroyed()) { win.show(); win.focus(); }
       resolve(result);
     };
 
-    const onDone = (e, r) => {
-      const o = overlays.get(e.sender.id);
-      if (!o) return;
-      const dip = { x: o.display.bounds.x + r.x, y: o.display.bounds.y + r.y, width: r.w, height: r.h };
+    const onDone = (_e, r) => {
+      if (!r || !Number.isFinite(r.x) || !Number.isFinite(r.y) || !(r.w >= 16) || !(r.h >= 16)) return;
+      const display = displayAt(r.x + r.w / 2, r.y + r.h / 2);
+      const dip = { x: r.x, y: r.y, width: r.w, height: r.h };
       const phys = platform.toPhysicalRect(screen, dip);
       // dipToScreenRect rounds outwards; derive the size from the scale factor so 1 CSS px stays exact.
       finish({
         x: phys.x,
         y: phys.y,
-        width: Math.floor(r.w * o.display.scaleFactor),
-        height: Math.floor(r.h * o.display.scaleFactor),
+        width: Math.max(16, Math.floor(r.w * display.scaleFactor)),
+        height: Math.max(16, Math.floor(r.h * display.scaleFactor)),
       });
     };
     const onCancel = () => finish(null);
+    const onSync = (_e, screenRect) => {
+      if (finished) return;
+      for (const { win: w } of overlays.values()) {
+        if (!w.isDestroyed()) w.webContents.send('overlay:place', screenRect);
+      }
+    };
+    const onDrop = () => {
+      if (finished) return;
+      stopCursor();
+      for (const { win: w } of overlays.values()) {
+        if (!w.isDestroyed()) w.webContents.send('overlay:drop');
+      }
+    };
+    const onWatch = (e, on) => {
+      stopCursor();
+      if (!on || finished || e.sender.isDestroyed()) return;
+      const sender = e.sender;
+      cursorTimer = setInterval(() => {
+        if (finished || sender.isDestroyed()) { stopCursor(); return; }
+        const p = screen.getCursorScreenPoint();
+        sender.send('overlay:cursor', { x: p.x, y: p.y });
+      }, 16);
+    };
+
+    let initialScreen = null;
+    if (initial && Number.isFinite(initial.x) && Number.isFinite(initial.y) && initial.width > 0 && initial.height > 0) {
+      const dip = platform.toDipRect(screen, initial);
+      initialScreen = { x: dip.x, y: dip.y, w: dip.width, h: dip.height };
+    }
+    const focusId = initialScreen
+      ? displayAt(initialScreen.x + initialScreen.w / 2, initialScreen.y + initialScreen.h / 2).id
+      : (screen.getPrimaryDisplay() || displays[0]).id;
 
     ipcMain.handle('overlay:initial', (e) => {
       const o = overlays.get(e.sender.id);
-      if (!o || !initial) return null;
-      const dip = platform.toDipRect(screen, initial);
-      const rel = { x: dip.x - o.display.bounds.x, y: dip.y - o.display.bounds.y, w: dip.width, h: dip.height };
+      if (!o) return null;
       const b = o.display.bounds;
-      const inside = rel.x >= 0 && rel.y >= 0 && rel.x + rel.w <= b.width && rel.y + rel.h <= b.height;
-      return inside ? rel : null;
+      return {
+        self: { id: o.display.id, x: b.x, y: b.y, width: b.width, height: b.height, scaleFactor: o.display.scaleFactor },
+        displays: dipDisplays,
+        screen: initialScreen,
+      };
     });
     ipcMain.on('overlay:done', onDone);
     ipcMain.on('overlay:cancel', onCancel);
+    ipcMain.on('overlay:sync', onSync);
+    ipcMain.on('overlay:watch', onWatch);
+    ipcMain.on('overlay:drop', onDrop);
 
     if (win && !win.isDestroyed()) win.hide();
 
-    displays.forEach((display, i) => {
+    displays.forEach((display) => {
       const w = new BrowserWindow({
         ...display.bounds,
         frame: false,
@@ -158,10 +221,18 @@ function selectArea(initial) {
           sandbox: true,
         },
       });
+      // Constructor bounds are sometimes ignored for transparent windows on a secondary monitor.
+      w.setBounds(display.bounds);
       w.setAlwaysOnTop(true, 'screen-saver');
       overlays.set(w.webContents.id, { win: w, display });
+      w.on('closed', () => { if (!finished) finish(null); });
       w.loadFile(path.join(__dirname, 'overlay', 'overlay.html'));
-      w.once('ready-to-show', () => { w.show(); if (i === 0) w.focus(); });
+      w.once('ready-to-show', () => {
+        if (w.isDestroyed()) return;
+        w.setBounds(display.bounds);
+        w.show();
+        if (display.id === focusId) w.focus();
+      });
     });
   });
 }
@@ -184,6 +255,7 @@ function syncAreaFrame() {
     frame: false, transparent: true, resizable: false, movable: false, focusable: false,
     skipTaskbar: true, alwaysOnTop: true, hasShadow: false, show: false,
   });
+  areaFrame.setBounds({ x: dip.x - pad, y: dip.y - pad, width: dip.width + pad * 2, height: dip.height + pad * 2 });
   areaFrame.setIgnoreMouseEvents(true);
   areaFrame.setAlwaysOnTop(true, 'screen-saver');
   const html = '<body style="margin:0;overflow:hidden"><div style="position:fixed;inset:0;border:' + pad + 'px solid #ff4d5e;box-sizing:border-box"></div></body>';

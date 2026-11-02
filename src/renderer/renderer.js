@@ -35,7 +35,7 @@ function render() {
   btn.textContent = rec ? 'Stop recording' : state.state === 'starting' ? 'Starting…' : stopping ? 'Saving…' : 'Start recording';
   btn.classList.toggle('stop', rec);
   btn.disabled = busy || stopping;
-  for (const id of ['source', 'quality', 'fps', 'encoder', 'audio', 'cursor', 'sysAudio', 'areaBtn', 'areaPreset', 'ax', 'ay', 'aw', 'ah', 'sizeSave']) $(id).disabled = rec || stopping;
+  for (const id of ['source', 'quality', 'fps', 'encoder', 'audio', 'cursor', 'sysAudio', 'areaBtn', 'areaPreset', 'areaDisplay', 'ax', 'ay', 'aw', 'ah', 'sizeSave']) $(id).disabled = rec || stopping;
   if (state.last_error && !rec) showError(state.last_error);
   else if (state.warning) showError(state.warning);
 }
@@ -66,9 +66,37 @@ function normalizeArea() {
   try { localStorage.setItem(AREA_KEY, JSON.stringify(area)); } catch { /* storage unavailable */ }
 }
 
+function displayForArea() {
+  const cx = area.x + area.w / 2;
+  const cy = area.y + area.h / 2;
+  return displays.find((d) => cx >= d.x && cx < d.x + d.width && cy >= d.y && cy < d.y + d.height) || displays[0];
+}
+
+/** Move the current rectangle onto another monitor, keeping its offset when it fits. */
+function moveAreaToDisplay(target) {
+  const current = displayForArea();
+  const ox = current ? area.x - current.x : 0;
+  const oy = current ? area.y - current.y : 0;
+  let w = Math.min(Math.max(area.w, 16), target.width);
+  let h = Math.min(Math.max(area.h, 16), target.height);
+  w -= w % 2;
+  h -= h % 2;
+  if (w < 16) w = Math.min(16, target.width - (target.width % 2));
+  if (h < 16) h = Math.min(16, target.height - (target.height % 2));
+  area.w = w;
+  area.h = h;
+  area.x = Math.min(Math.max(target.x + ox, target.x), target.x + target.width - w);
+  area.y = Math.min(Math.max(target.y + oy, target.y), target.y + target.height - h);
+  normalizeArea();
+  renderArea();
+}
+
 function renderArea() {
   $('ax').value = area.x; $('ay').value = area.y; $('aw').value = area.w; $('ah').value = area.h;
-  $('areaHint').textContent = `Recording ${area.w} × ${area.h} px at (${area.x}, ${area.y}). Output keeps these exact pixels, no scaling.`;
+  const d = displayForArea();
+  if (d) $('areaDisplay').value = String(d.index);
+  const where = d ? ` on ${d.label}` : '';
+  $('areaHint').textContent = `Recording ${area.w} × ${area.h} px at (${area.x}, ${area.y})${where}. Pick a display above to move it, or drag the on-screen box onto any monitor. Output keeps these exact pixels, no scaling.`;
 }
 
 function onSourceChange() {
@@ -86,6 +114,7 @@ function sourceFromSelect() {
 
 function initArea() {
   try { Object.assign(area, JSON.parse(localStorage.getItem(AREA_KEY)) || {}); } catch { /* use default */ }
+  fill($('areaDisplay'), displays.map((d) => [String(d.index), `${d.label} — ${d.width}×${d.height}`]));
   if (!localStorage.getItem(AREA_KEY)) {
     const p = displays[0];
     area.x = p.x + Math.floor((p.width - area.w) / 2);
@@ -96,11 +125,17 @@ function initArea() {
   for (const [id, key] of [['ax', 'x'], ['ay', 'y'], ['aw', 'w'], ['ah', 'h']]) {
     $(id).onchange = () => { area[key] = $(id).value; normalizeArea(); renderArea(); };
   }
+  $('areaDisplay').onchange = () => {
+    const d = displays.find((x) => String(x.index) === $('areaDisplay').value);
+    if (d) moveAreaToDisplay(d);
+  };
   $('areaPreset').onchange = () => {
     const v = $('areaPreset').value;
     if (v === 'display') {
-      const d = displays.find((x) => area.x >= x.x && area.x < x.x + x.width && area.y >= x.y && area.y < x.y + x.height) || displays[0];
-      Object.assign(area, { x: d.x, y: d.y, w: d.width, h: d.height });
+      const d = displays.find((x) => String(x.index) === $('areaDisplay').value) || displayForArea() || displays[0];
+      const w = Math.max(16, d.width - (d.width % 2));
+      const h = Math.max(16, d.height - (d.height % 2));
+      Object.assign(area, { x: d.x, y: d.y, w, h });
     } else if (v) {
       [area.w, area.h] = v.split('x').map(Number);
     }

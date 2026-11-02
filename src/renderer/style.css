@@ -127,8 +127,8 @@ select {
   border-radius: 8px; padding: 6px 8px; width: 100%;
 }
 .area { background: #11141a; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
-.area .row { margin-bottom: 10px; }
-.area .row select { width: auto; }
+.area .row { margin-bottom: 10px; flex-wrap: wrap; }
+.area .row select { width: auto; flex: 1 1 180px; }
 .coords { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .coords label { display: flex; align-items: center; gap: 6px; margin: 0; }
 .coords input {
