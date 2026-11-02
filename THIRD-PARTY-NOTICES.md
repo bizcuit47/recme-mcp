@@ -17,8 +17,8 @@ The installer contains `ffmpeg.exe` and `ffprobe.exe` (in `resources/ffmpeg/`), 
 
 The macOS `.dmg`/`.zip` contains static `ffmpeg` and `ffprobe` (in `Recme.app/Contents/Resources/ffmpeg/`), fetched
 by `npm run fetch:ffmpeg-mac` from the npm packages [`ffmpeg-static`](https://github.com/eugeneware/ffmpeg-static)
-and [`ffprobe-static`](https://github.com/joshwnj/ffprobe-static). On Intel Macs these are the static builds from
-<https://evermeet.cx/ffmpeg/>, configured with `--enable-gpl --enable-version3` (GPL v3 or later, includes x264).
+and [`@ffprobe-installer`](https://github.com/SavageCore/node-ffprobe-installer) (`darwin-x64` / `darwin-arm64`).
+The `ffmpeg` builds are configured with `--enable-gpl` (GPL, includes x264).
 The same rules as above apply when you redistribute it. Note that the `LICENSE` file copied next to the macOS
 binaries is the general FFmpeg licence overview shipped by `ffmpeg-static`; if you distribute the macOS build,
 also include the full GPL v3 text and a source offer, or use an LGPL build of FFmpeg instead.

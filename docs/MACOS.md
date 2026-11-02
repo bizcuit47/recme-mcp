@@ -41,15 +41,28 @@ npm run fetch:ffmpeg-mac     # static ffmpeg + ffprobe for THIS Mac's architectu
 npm run dist:mac             # runs check:ffmpeg-mac first, then builds dist/Recme-<version>-<arch>.dmg and .zip
 ```
 
-- `fetch:ffmpeg-mac` downloads the `ffmpeg-static` / `ffprobe-static` npm packages into a temp folder (they are
-  not added to `package.json`). Set `RECME_MAC_ARCH=x64` or `arm64` to fetch the other architecture.
-- `check:ffmpeg-mac` fails the build if ffmpeg/ffprobe are missing, link to anything outside `/usr/lib` and
-  `/System/Library`, do not run, or lack `avfoundation`. This is what stops a Homebrew copy from sneaking in.
-- A build is for **one architecture**: an Intel build (`x64`) and an Apple Silicon build (`arm64`) each need their
-  own ffmpeg. Intel apps run on Apple Silicon through Rosetta, but not the other way round.
-- The result is **unsigned and not notarized**. On the Mac that built it you can just open it. On another Mac,
-  Gatekeeper blocks a downloaded copy: right-click the app, choose *Open*, or run
-  `xattr -cr /Applications/Recme.app`. Removing that step needs an Apple Developer account.
+- `fetch:ffmpeg-mac` downloads `ffmpeg-static` and `@ffprobe-installer/darwin-<arch>` from npm into a temp folder
+  (they are not added to `package.json`) and checks both files are the right architecture. (`ffprobe-static` is
+  not used: its `darwin/arm64` folder holds an Intel binary.)
+- `check:ffmpeg-mac` fails the build if ffmpeg/ffprobe are missing, are the wrong architecture, link to anything
+  outside `/usr/lib` and `/System/Library`, do not run, or lack `avfoundation`. This is what stops a Homebrew copy
+  from sneaking in. When the target architecture is not the machine's own, the binaries cannot be run, so they are
+  only inspected.
+- A build is for **one architecture**, and you can build either one on either kind of Mac:
+
+  ```bash
+  RECME_MAC_ARCH=arm64 npm run fetch:ffmpeg-mac && RECME_MAC_ARCH=arm64 npm run dist:mac -- --arm64   # Apple Silicon
+  RECME_MAC_ARCH=x64   npm run fetch:ffmpeg-mac && RECME_MAC_ARCH=x64   npm run dist:mac -- --x64     # Intel
+  ```
+
+  Intel apps run on Apple Silicon through Rosetta (if installed), but not the other way round. Do the two builds
+  one after the other: both use `vendor/ffmpeg`.
+- The app is **ad-hoc signed** (`mac.identity` is `-` in `package.json`; no Apple account needed). Apple Silicon
+  refuses to run an app whose signature is broken, and electron-builder otherwise leaves Electron's old signature
+  in place, so this is required for the arm64 build. It is **not notarized**: on another Mac, Gatekeeper blocks a
+  downloaded copy. Right-click the app, choose *Open*, or run `xattr -cr /Applications/Recme.app`. Removing that
+  step needs a paid Apple Developer account (set `mac.identity` to your certificate, then notarize).
+- **The arm64 build has only been built, never run on an Apple Silicon Mac.**
 - The bundled ffmpeg is a **GPL** build (see `THIRD-PARTY-NOTICES.md`); follow the GPL if you distribute it.
 
 ## CI
@@ -58,7 +71,8 @@ npm run dist:mac             # runs check:ffmpeg-mac first, then builds dist/Rec
 
 - **Windows** – `npm run test:edit`.
 - **macOS** – the same headless suite on a real macOS runner (experimental, failures do not block).
-- **macOS build** – an unsigned `.dmg`/`.zip` as a downloadable workflow artifact (experimental).
+- **macOS build** – an ad-hoc signed, not notarized arm64 `.dmg`/`.zip` as a downloadable workflow artifact
+  (experimental).
 
 A green macOS job only proves the platform-independent parts. It cannot test screen capture, because CI
 machines have no display or permissions.

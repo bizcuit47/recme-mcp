@@ -6,8 +6,7 @@
 //
 // Put the binaries there yourself (they are not in git):
 //   vendor/ffmpeg/ffmpeg   vendor/ffmpeg/ffprobe   vendor/ffmpeg/LICENSE
-// A static build for Intel Macs: the npm packages `ffmpeg-static` and `ffprobe-static` (bin/darwin/x64/ffprobe),
-// or https://evermeet.cx/ffmpeg/ . For Apple Silicon use an arm64 static build and build on / for arm64.
+// `npm run fetch:ffmpeg-mac` fills it (RECME_MAC_ARCH=x64|arm64 picks the architecture; default is this machine's).
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
@@ -20,6 +19,13 @@ if (process.platform !== 'darwin') {
 const dir = path.join(__dirname, '..', 'vendor', 'ffmpeg');
 let bad = false;
 
+// Target architecture of the build (default: this machine). When it differs from the machine we are on (an arm64
+// build made on an Intel Mac), the binaries cannot be run here, so we only check what can be read from the file.
+const target = process.env.RECME_MAC_ARCH || process.arch;
+const wantFile = target === 'arm64' ? 'arm64' : 'x86_64';
+const canRun = target === process.arch;
+if (!canRun) console.warn(`NOTE: target ${target} differs from this machine (${process.arch}); the binaries are not run, only inspected.`);
+
 for (const name of ['ffmpeg', 'ffprobe']) {
   const file = path.join(dir, name);
   if (!fs.existsSync(file)) {
@@ -28,6 +34,9 @@ for (const name of ['ffmpeg', 'ffprobe']) {
     continue;
   }
   try { fs.chmodSync(file, 0o755); } catch { /* read-only is fine if it is already executable */ }
+
+  const kind = spawnSync('file', [file], { encoding: 'utf8' }).stdout || '';
+  if (!kind.includes(wantFile)) { console.error(`${name} is not a ${wantFile} binary: ${kind.trim()}`); bad = true; continue; }
 
   const otool = spawnSync('otool', ['-L', file], { encoding: 'utf8' });
   if (otool.status !== 0) { console.error(`${name}: otool failed: ${otool.stderr}`); bad = true; continue; }
@@ -38,6 +47,8 @@ for (const name of ['ffmpeg', 'ffprobe']) {
     bad = true;
     continue;
   }
+
+  if (!canRun) { console.log(`ok  ${name}: ${wantFile}, static (not run: other architecture)`); continue; }
 
   const run = spawnSync(file, ['-version'], { encoding: 'utf8', timeout: 10000 });
   if (run.status !== 0) { console.error(`${name} does not run: ${run.stderr || run.error}`); bad = true; continue; }
