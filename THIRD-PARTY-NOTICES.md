@@ -13,6 +13,16 @@ The installer contains `ffmpeg.exe` and `ffprobe.exe` (in `resources/ffmpeg/`), 
 - Source code: FFmpeg's source is available at <https://ffmpeg.org/download.html>; the exact sources used for the gyan.dev build are linked from <https://www.gyan.dev/ffmpeg/builds/>.
 - Recme runs FFmpeg as a separate program (it does not link to it). If you redistribute the installer, you must follow the GPL for the bundled FFmpeg (keep the license text, and make the corresponding source available), or replace it with an LGPL build of FFmpeg.
 
+### macOS build
+
+The macOS `.dmg`/`.zip` contains static `ffmpeg` and `ffprobe` (in `Recme.app/Contents/Resources/ffmpeg/`), fetched
+by `npm run fetch:ffmpeg-mac` from the npm packages [`ffmpeg-static`](https://github.com/eugeneware/ffmpeg-static)
+and [`ffprobe-static`](https://github.com/joshwnj/ffprobe-static). On Intel Macs these are the static builds from
+<https://evermeet.cx/ffmpeg/>, configured with `--enable-gpl --enable-version3` (GPL v3 or later, includes x264).
+The same rules as above apply when you redistribute it. Note that the `LICENSE` file copied next to the macOS
+binaries is the general FFmpeg licence overview shipped by `ffmpeg-static`; if you distribute the macOS build,
+also include the full GPL v3 text and a source offer, or use an LGPL build of FFmpeg instead.
+
 ## Runtime dependencies (npm)
 
 | Package | License | Use |

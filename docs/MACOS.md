@@ -17,7 +17,7 @@ everything below marked **UNVERIFIED** is a best guess from documentation, not s
 | Window list / window capture | Window list through JXA (`CGWindowListCopyWindowInfo`) is written, **UNVERIFIED**. `window` capture is rejected on macOS; `window_area` (record the window's rectangle) is the intended route. |
 | Hardware encoder | `h264_videotoolbox` mapping written, quality mapping **UNVERIFIED**. |
 | Launch at login, hotkey labels (Cmd) | Written, **UNVERIFIED**. |
-| Build (`npm run dist:mac`) | Config is in `package.json`; produces an **unsigned** dmg/zip. Not signed, not notarized. |
+| Build (`npm run dist:mac`) | Produces an **unsigned** dmg/zip with a static ffmpeg inside (built and checked on an Intel Mac; the bundled ffmpeg runs). Not signed, not notarized. |
 
 ## Known limits of the macOS design
 
@@ -27,10 +27,30 @@ everything below marked **UNVERIFIED** is a best guess from documentation, not s
 - The first run needs Screen Recording permission (System Settings → Privacy & Security), and the app has to be
   restarted after granting it. Microphone has its own permission prompt.
 - The bundled ffmpeg must be a **static** build. Homebrew's ffmpeg links to dylibs, so copying just the binary
-  into the app would not run on another Mac. Until that is solved the app looks for `ffmpeg` in
-  `/opt/homebrew/bin`, `/usr/local/bin`, `/opt/local/bin` (`brew install ffmpeg`).
+  into the app would not run on another Mac. The macOS build therefore bundles a static ffmpeg/ffprobe
+  (see "Build the macOS app" below); a packaged app needs no Homebrew. When you run from source (`npm start`)
+  the app falls back to `/opt/homebrew/bin`, `/usr/local/bin`, `/opt/local/bin` (`brew install ffmpeg`).
 - Shipping outside a developer's own machine needs an Apple Developer account (paid) for signing and notarization.
   Without it Gatekeeper will block the downloaded app.
+
+## Build the macOS app
+
+```bash
+npm install
+npm run fetch:ffmpeg-mac     # static ffmpeg + ffprobe for THIS Mac's architecture into vendor/ffmpeg
+npm run dist:mac             # runs check:ffmpeg-mac first, then builds dist/Recme-<version>-<arch>.dmg and .zip
+```
+
+- `fetch:ffmpeg-mac` downloads the `ffmpeg-static` / `ffprobe-static` npm packages into a temp folder (they are
+  not added to `package.json`). Set `RECME_MAC_ARCH=x64` or `arm64` to fetch the other architecture.
+- `check:ffmpeg-mac` fails the build if ffmpeg/ffprobe are missing, link to anything outside `/usr/lib` and
+  `/System/Library`, do not run, or lack `avfoundation`. This is what stops a Homebrew copy from sneaking in.
+- A build is for **one architecture**: an Intel build (`x64`) and an Apple Silicon build (`arm64`) each need their
+  own ffmpeg. Intel apps run on Apple Silicon through Rosetta, but not the other way round.
+- The result is **unsigned and not notarized**. On the Mac that built it you can just open it. On another Mac,
+  Gatekeeper blocks a downloaded copy: right-click the app, choose *Open*, or run
+  `xattr -cr /Applications/Recme.app`. Removing that step needs an Apple Developer account.
+- The bundled ffmpeg is a **GPL** build (see `THIRD-PARTY-NOTICES.md`); follow the GPL if you distribute it.
 
 ## CI
 

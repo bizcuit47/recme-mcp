@@ -25,7 +25,9 @@
     "test:mcp": "node scripts/test-mcp.js",
     "test:audio": "node scripts/test-audio.js",
     "test:edit": "node scripts/test-edit-share.js",
-    "dist:mac": "npm run icon && electron-builder --mac dmg zip",
+    "fetch:ffmpeg-mac": "node scripts/fetch-ffmpeg-mac.js",
+    "check:ffmpeg-mac": "node scripts/check-ffmpeg-mac.js",
+    "dist:mac": "npm run icon && npm run check:ffmpeg-mac && electron-builder --mac dmg zip",
     "test:cli": "node scripts/test-cli.js"
   },
   "license": "MIT",
