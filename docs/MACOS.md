@@ -1,6 +1,7 @@
 # macOS status
 
-**Short version: Recme does not work on macOS yet.** Windows is the only supported platform today.
+**Short version: a macOS build exists (Intel and Apple Silicon, ffmpeg included) but it has never been tested on a
+real Mac, so it may not work.** Windows is the only tested platform today.
 
 Phase 1 of the port is in the repository: all Windows-specific code now sits behind a platform adapter
 (`src/platform/`), and an *untested* macOS adapter exists next to it. Nobody has run Recme on a Mac, so

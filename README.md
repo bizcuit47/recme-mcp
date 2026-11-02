@@ -6,6 +6,12 @@
 
 Open the newest release at the top (it is a **beta**), download **`Recme-Setup-<version>.exe`** from *Assets*, run it, done (ffmpeg is included; no other install needed). Windows 10/11, 64-bit. The installer is not code-signed, so SmartScreen may warn: *More info → Run anyway*. SHA-256 of each installer is in the release notes.
 
+### 🍎 macOS (experimental, untested)
+
+In the same release, download **`Recme-<version>-arm64.dmg`** (Apple Silicon: M1/M2/M3/M4) or **`Recme-<version>-x64.dmg`** (Intel), open it and drag Recme to *Applications* (ffmpeg is included; no Homebrew needed). **The macOS version has not been tested on a real Mac yet**, so expect problems and please [report them](docs/MACOS.md#want-to-help-test-on-a-mac).
+
+The app is not notarized, so macOS blocks it the first time: right-click Recme → *Open* → *Open*, or run `xattr -cr /Applications/Recme.app`. On first use allow *Screen Recording* in System Settings → Privacy & Security, then quit and start Recme again. Details and limits: [docs/MACOS.md](docs/MACOS.md).
+
 ![Recme tour: record, library, editor, share, Claude](docs/demo.gif)
 
 > 📖 How it works / what it is built with (Thai): [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md)
@@ -123,7 +129,7 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md) (please report privately).
 
 ## Known limits
 
-Windows only for now. A macOS port is in development and does **not** work yet; see [docs/MACOS.md](docs/MACOS.md) for the status and how to help test on a Mac. `gdigrab` reaches about 28–29 fps at 2880×1800. System sound is merged when you stop. The editor is basic (no text, transitions or multi-track). Not yet verified: transfers between two real devices and with the real LocalSend app, recording on multi-monitor setups, the installer itself.
+Windows is the only tested platform. A macOS build exists but has **never been run on a real Mac**; see [docs/MACOS.md](docs/MACOS.md) for the status and how to help test. `gdigrab` reaches about 28–29 fps at 2880×1800. System sound is merged when you stop. The editor is basic (no text, transitions or multi-track). Not yet verified: transfers between two real devices and with the real LocalSend app, recording on multi-monitor setups, the installer itself.
 
 ## Contributing
 
